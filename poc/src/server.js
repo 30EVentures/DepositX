@@ -6,12 +6,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Network } from './network.js';
 import { bench } from './bench.js';
+import { samplePacs008 } from './iso20022.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, '..', 'public');
 const PORT = Number(process.env.PORT) || 8787;
 
-let net = new Network();
+const DATA = process.env.CONCORD_DATA || null; // set to a directory to make the demo durable
+let net = new Network({ dataDir: DATA });
 const clients = new Set();
 const push = () => {
   for (const res of clients) res.write(`data: ${net.ledger.s.height}\n\n`);
@@ -47,7 +49,7 @@ function act(b) {
     case 'chaos': return net.chaos(String(b.type), b.issuer ? { issuer: issuerId(b.issuer) } : {});
     case 'advance': return net.advance(Math.max(1, Math.min(7200, Number(b.seconds) | 0)));
     case 'corePause': return net.setCorePaused(!!b.on);
-    case 'reset': net.listeners.clear(); net = new Network(); watch(); push(); return { ok: true, message: 'network reset to genesis' };
+    case 'reset': net.listeners.clear(); net.store?.close(); net = new Network({ dataDir: DATA, fresh: true }); watch(); push(); return { ok: true, message: 'network reset to genesis' };
     default: return { ok: false, error: 'UNKNOWN_ACTION' };
   }
 }
@@ -71,6 +73,22 @@ http
         clients.add(res);
         req.on('close', () => clients.delete(res));
         return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/iso/pacs008') {
+        let body = '';
+        req.on('data', (c) => {
+          body += c;
+          if (body.length > 25_000) req.destroy();
+        });
+        req.on('end', () => {
+          res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'no-store' });
+          res.end(net.pacs008(body));
+        });
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/iso/sample') {
+        res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
+        return res.end(samplePacs008({ amount: url.searchParams.get('amount') || '25000.00' }));
       }
       if (req.method === 'POST' && url.pathname === '/api/action') {
         let body = '';
@@ -99,4 +117,4 @@ http
       json(res, 500, { ok: false, error: 'SERVER_ERROR', message: e.message });
     }
   })
-  .listen(PORT, '127.0.0.1', () => console.log(`Concord PoC running at http://127.0.0.1:${PORT}`));
+  .listen(PORT, '127.0.0.1', () => console.log(`Concord PoC running at http://127.0.0.1:${PORT}` + (DATA ? ` (durable: ${DATA}, ${net.recovered ? 'recovered ' + net.recovered.blocks + ' blocks' : 'new'})` : ' (in memory)')));

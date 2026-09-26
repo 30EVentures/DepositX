@@ -251,7 +251,14 @@ function renderActions() {
       el('button', { class: 'ghost', onclick: () => act({ kind: 'advance', seconds: 960 }, 'Clock.') }, 'Advance clock 16 min')),
     el('div', { class: 'hint' }, 'Red buttons corrupt state or the core; grey buttons are attacks the kernel must refuse. Pause the core, pay across banks, then advance the clock: the in-flight amounts age into a quarantine.')));
 
-  root.append(el('fieldset', {}, el('legend', {}, '6 · Recover'),
+  root.append(el('fieldset', {}, el('legend', {}, '6 · ISO 20022 gateway (pacs.008 in, pacs.002 out)'),
+    el('textarea', { 'aria-label': 'pacs.008 message', rows: 9, style: 'width:100%;font:12px var(--mono);border:1px solid var(--hair);border-radius:6px;padding:8px;background:var(--card);color:var(--ink)', oninput: (e) => (form.isoXml = e.target.value) }, form.isoXml || ''),
+    el('div', { class: 'row' },
+      el('button', { class: 'ghost', onclick: async () => { form.isoXml = await (await fetch('/api/iso/sample?amount=25000.00')).text(); form.isoOut = ''; renderActions(); } }, 'New sample message'),
+      el('button', { onclick: async () => { const r = await fetch('/api/iso/pacs008', { method: 'POST', body: form.isoXml || '' }); form.isoOut = await r.text(); await refresh(); } }, 'Send pacs.008')),
+    form.isoOut ? el('pre', { style: 'margin:8px 0 0;padding:8px;border:1px solid var(--hair);border-radius:6px;overflow:auto;font:12px var(--mono);background:var(--card)' }, form.isoOut) : el('div', { class: 'hint' }, 'The payment UETR becomes the ledger instruction id, so sending the same message twice is refused as a duplicate. Edit the amount or accounts, or break the XML.')));
+
+  root.append(el('fieldset', {}, el('legend', {}, '7 · Recover'),
     el('div', { class: 'row' },
       el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'repair' }, 'Patch.') }, 'Patch the ledger defect'),
       el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'reattest', issuer: 'MPL' }, 'Reconcile.') }, 'Maple re-attests true balance'),

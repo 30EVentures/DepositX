@@ -59,4 +59,21 @@ export class Bank {
   attestation() {
     return { L: this.controlGL, seq: ++this.seq };
   }
+
+  snapshot() {
+    return {
+      customers: [...this.customers.values()].map((c) => ({ ...c, ordinary: c.ordinary.toString() })),
+      controlGL: this.controlGL.toString(),
+      seq: this.seq,
+      cbBalance: this.cbBalance.toString(),
+      holdCounter: this.holdCounter,
+    };
+  }
+  restore(o) {
+    this.customers = new Map(o.customers.map((c) => [c.id, { ...c, ordinary: BigInt(c.ordinary) }]));
+    this.controlGL = BigInt(o.controlGL);
+    this.seq = o.seq;
+    this.cbBalance = BigInt(o.cbBalance);
+    this.holdCounter = o.holdCounter;
+  }
 }

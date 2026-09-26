@@ -37,3 +37,7 @@ export function verify(pubHex, msg, sigHex) {
     return false;
   }
 }
+
+// Dev keystore helpers. The PoC keeps private keys in a 0600 file; production uses HSMs.
+export const exportKey = (k) => ({ pub: k.pub, priv: k.priv.export({ type: 'pkcs8', format: 'der' }).toString('hex') });
+export const importKey = (o) => ({ pub: o.pub, priv: crypto.createPrivateKey({ key: Buffer.from(o.priv, 'hex'), format: 'der', type: 'pkcs8' }) });

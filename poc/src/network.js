@@ -5,7 +5,9 @@
 import crypto from 'node:crypto';
 import { Ledger } from './kernel.js';
 import { Bank } from './bank.js';
-import { canon, genKey, sign, verify, sha256 } from './crypto.js';
+import { canon, genKey, sign, verify, sha256, exportKey, importKey } from './crypto.js';
+import { Store } from './store.js';
+import { parsePacs008, buildPacs002, centsOf, IsoError } from './iso20022.js';
 
 export const dollars = (n) => BigInt(Math.round(n * 100));
 export const fmt = (cents) => {
@@ -37,31 +39,32 @@ export class Network {
   }
 
   // ------------------------------------------------------------------ setup
+  // With opts.dataDir the network is durable: every block is appended (fsync'd) to a hash-chained log and
+  // reopening the same directory recovers by replaying it. Without it, everything lives in memory.
   reset() {
-    const K = { issuers: {}, gov: {}, validators: {}, rec: {} };
-    for (const i of ISSUERS) K.issuers[i.id] = { ops: genKey(), mint: genKey(), attest: genKey(), screen: genKey() };
-    K.gov.operator = genKey();
-    K.gov.neutral = genKey();
-    K.observer = genKey(); // Bank of Canada supervisory node (non-voting)
-    K.anchor = genKey(); // anchor gateway
-    K.rec.operator = genKey();
-    K.rec.observer = K.observer; // the observer can also pull the fire alarm
-    K.validators.operator = genKey();
-    for (const i of ISSUERS) K.validators[i.id] = genKey();
-    this.K = K;
-    const genesis = {
-      chainId: 'concord-poc',
-      params: { maxTx: '500000000' }, // $5,000,000.00 per instruction (capped pilot)
-      issuers: ISSUERS.map((i) => ({ id: i.id, name: i.name, keys: Object.fromEntries(Object.entries(K.issuers[i.id]).map(([k, v]) => [k, v.pub])) })),
-      governance: { operator: K.gov.operator.pub, neutral: K.gov.neutral.pub },
-      observer: K.observer.pub,
-      anchor: K.anchor.pub,
-      reconcilers: { operator: K.rec.operator.pub, observer: K.observer.pub },
-      securities: [{ id: 'CAN-2031', name: 'Government of Canada 3.0% 2031 (illustrative)' }],
-      validators: Object.entries(K.validators).map(([id, k]) => ({ id, pub: k.pub })),
-    };
-    this.genesis = genesis;
-    this.ledger = new Ledger(genesis);
+    this.store = this.opts.dataDir ? new Store(this.opts.dataDir) : null;
+    if (this.store && this.store.exists() && !this.opts.fresh) return this.#recover();
+    this.#fresh();
+    if (this.store) {
+      this.store.wipe();
+      this.store.init({ genesis: this.genesis, keys: this.#serializeKeys() });
+    }
+    if (!this.opts.bare) this.bootstrap();
+  }
+
+  #serializeKeys() {
+    const K = this.K;
+    const ex = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, exportKey(v)]));
+    return { issuers: Object.fromEntries(Object.entries(K.issuers).map(([id, o]) => [id, ex(o)])), gov: ex(K.gov), validators: ex(K.validators), observer: exportKey(K.observer), anchor: exportKey(K.anchor), recOperator: exportKey(K.rec.operator) };
+  }
+  #deserializeKeys(o) {
+    const im = (x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, importKey(v)]));
+    const K = { issuers: Object.fromEntries(Object.entries(o.issuers).map(([id, x]) => [id, im(x)])), gov: im(o.gov), validators: im(o.validators), observer: importKey(o.observer), anchor: importKey(o.anchor), rec: { operator: importKey(o.recOperator) } };
+    K.rec.observer = K.observer;
+    return K;
+  }
+
+  #resetRuntime() {
     this.banks = Object.fromEntries(
       ISSUERS.map((i) => [i.id, new Bank(i.id, i.name, i.customers.map((c) => ({ ...c, ordinary: dollars(5_000_000) })), dollars(50_000_000))]),
     );
@@ -73,7 +76,71 @@ export class Network {
     this.coreTasks = [];
     this.chaosState = {};
     this.counter = 0;
-    if (!this.opts.bare) this.bootstrap();
+  }
+
+  #fresh() {
+    const K = { issuers: {}, gov: {}, validators: {}, rec: {} };
+    for (const i of ISSUERS) K.issuers[i.id] = { ops: genKey(), mint: genKey(), attest: genKey(), screen: genKey() };
+    K.gov.operator = genKey();
+    K.gov.neutral = genKey();
+    K.observer = genKey(); // Bank of Canada supervisory node (non-voting)
+    K.anchor = genKey(); // anchor gateway
+    K.rec.operator = genKey();
+    K.rec.observer = K.observer; // the observer can also pull the fire alarm
+    K.validators.operator = genKey();
+    for (const i of ISSUERS) K.validators[i.id] = genKey();
+    this.K = K;
+    this.genesis = {
+      chainId: 'concord-poc',
+      params: { maxTx: '500000000' }, // $5,000,000.00 per instruction (capped pilot)
+      issuers: ISSUERS.map((i) => ({ id: i.id, name: i.name, keys: Object.fromEntries(Object.entries(K.issuers[i.id]).map(([k, v]) => [k, v.pub])) })),
+      governance: { operator: K.gov.operator.pub, neutral: K.gov.neutral.pub },
+      observer: K.observer.pub,
+      anchor: K.anchor.pub,
+      reconcilers: { operator: K.rec.operator.pub, observer: K.observer.pub },
+      securities: [{ id: 'CAN-2031', name: 'Government of Canada 3.0% 2031 (illustrative)' }],
+      validators: Object.entries(K.validators).map(([id, k]) => ({ id, pub: k.pub })),
+    };
+    this.ledger = new Ledger(this.genesis);
+    this.#resetRuntime();
+  }
+
+  // Crash recovery: replay every stored block through the kernel and require the recomputed block hash to
+  // equal the stored one. Any altered, dropped or reordered history fails here.
+  #recover() {
+    const { genesis, keys } = this.store.readMeta();
+    this.genesis = genesis;
+    this.K = this.#deserializeKeys(keys);
+    this.ledger = new Ledger(genesis);
+    this.#resetRuntime();
+    const records = this.store.load();
+    let last = null;
+    for (const [n, rec] of records.entries()) {
+      if (rec.unsafe) {
+        this.#applyUnsafe(rec.unsafe);
+        continue;
+      }
+      const res = this.ledger.executeBlock({ txs: rec.txs, time: rec.time });
+      if (res.hash !== rec.hash) throw new Error(`STORE_CORRUPT: block ${res.header.height} (record ${n + 1}) replays to a different hash; history was altered`);
+      this.log.push({ time: rec.time, txs: rec.txs });
+      this.blocks.push(this.#makeBlock(res));
+      if (this.blocks.length > 500) this.blocks.shift();
+      last = rec;
+    }
+    if (last) {
+      for (const [id, snap] of Object.entries(last.banks)) this.banks[id].restore(snap);
+      this.coreTasks = last.tasks.map((t) => ({ ...t, amount: BigInt(t.amount), posted: t.posted ? { L_after: BigInt(t.posted.L_after), seq: t.posted.seq } : undefined }));
+      this.clockOffset = last.clockOffset;
+      this.corePaused = last.corePaused;
+      this.counter = last.counter;
+    }
+    this.recovered = { blocks: records.length };
+  }
+
+  #applyUnsafe(u) {
+    const amount = BigInt(u.amount);
+    this.chaosState.inflated = u.kind === 'inflate' ? (this.chaosState.inflated || 0n) + amount : 0n;
+    this.ledger.unsafeMutate((st) => (st.accounts.get('LKS:elm').balance += u.kind === 'inflate' ? amount : -amount));
   }
 
   // Opens every customer account, seeds the securities holding, prefunds settlement positions and
@@ -103,8 +170,8 @@ export class Network {
   }
 
   // Builds and signs a transaction. `roles` are the signatures the kernel will require.
-  tx(type, payload, roles, { ttl = 60, keyOverride = {} } = {}) {
-    const t = { inst_id: `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, sigs: {} };
+  tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId } = {}) {
+    const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, sigs: {} };
     // sign using the same canonical message the kernel verifies
     const msg = canon({ d: 'concord-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
@@ -112,10 +179,7 @@ export class Network {
   }
 
   // ------------------------------------------------------------------ consensus (simulated)
-  submit(txs) {
-    const time = Math.max(this.ledger.s.time, this.now());
-    const res = this.ledger.executeBlock({ txs, time });
-    this.log.push({ time, txs });
+  #makeBlock(res) {
     const sigs = {};
     for (const [id, k] of Object.entries(this.K.validators)) sigs[id] = sign(k.priv, res.hash);
     const block = {
@@ -128,9 +192,32 @@ export class Network {
       violations: res.violations,
     };
     block.receiptOk = Network.verifyReceipt(this.genesis, block);
+    return block;
+  }
+
+  // `consumeTask`: an adapter follow-up that this block completes. It is removed from the backlog BEFORE the
+  // record is persisted, so a crash right after this block cannot make recovery redo it.
+  submit(txs, { consumeTask } = {}) {
+    const time = Math.max(this.ledger.s.time, this.now());
+    const res = this.ledger.executeBlock({ txs, time });
+    this.log.push({ time, txs });
+    const block = this.#makeBlock(res);
     this.blocks.push(block);
     if (this.blocks.length > 500) this.blocks.shift();
     for (const r of res.results) if (r.ok) this.#onEvents(r.events);
+    if (consumeTask && res.results[0].error !== 'NETWORK_HALTED') this.coreTasks = this.coreTasks.filter((x) => x !== consumeTask);
+    if (this.store) {
+      this.store.append({
+        time,
+        txs,
+        hash: res.hash,
+        banks: Object.fromEntries(Object.entries(this.banks).map(([id, b]) => [id, b.snapshot()])),
+        tasks: this.coreTasks.map((t) => ({ ...t, amount: t.amount.toString(), posted: t.posted ? { L_after: t.posted.L_after.toString(), seq: t.posted.seq } : undefined })),
+        clockOffset: this.clockOffset,
+        corePaused: this.corePaused,
+        counter: this.counter,
+      });
+    }
     for (const l of this.listeners) l({ type: 'block', height: block.height });
     return block;
   }
@@ -183,10 +270,9 @@ export class Network {
       }
       const type = { closeRedemption: 'CLOSE_REDEMPTION', closeConvertOut: 'CLOSE_CONVERT_OUT', closeConvertIn: 'CLOSE_CONVERT_IN' }[t.kind];
       const tx = this.tx(type, { issuer: t.issuer, id: t.id, L_after: t.posted.L_after.toString(), seq: t.posted.seq }, [`attest:${t.issuer}`]);
-      const block = this.submit([tx]);
+      const block = this.submit([tx], { consumeTask: t });
       const r = block.results[0];
       if (!r.ok && r.error === 'NETWORK_HALTED') break; // retry after the network resumes
-      this.coreTasks.shift();
       if (r.ok) done++;
     }
     return done;
@@ -228,18 +314,38 @@ export class Network {
     return null;
   }
 
-  pay(fromAcct, toAcct, amt, { queue = false } = {}) {
+  pay(fromAcct, toAcct, amt, { queue = false, instId } = {}) {
     const blocked = this.#complianceCheck(fromAcct, toAcct);
     if (blocked) return blocked;
     const [a] = fromAcct.split(':');
     const [b] = toAcct.split(':');
     const same = a === b;
     const tx = same
-      ? this.tx('TRANSFER', { from: fromAcct, to: toAcct, amount: amt.toString() }, [`ops:${a}`, `screen:${a}`])
-      : this.tx('PAYMENT', { from: fromAcct, to: toAcct, amount: amt.toString(), queueIfShort: queue }, [`ops:${a}`, `screen:${a}`, `accept:${b}`]);
+      ? this.tx('TRANSFER', { from: fromAcct, to: toAcct, amount: amt.toString() }, [`ops:${a}`, `screen:${a}`], { instId })
+      : this.tx('PAYMENT', { from: fromAcct, to: toAcct, amount: amt.toString(), queueIfShort: queue }, [`ops:${a}`, `screen:${a}`, `accept:${b}`], { instId });
     const block = this.submit([tx]);
     this.pumpCore();
     return this.#res(block, { stage: 'payment', events: block.results[0].events.map((e) => e.type) });
+  }
+
+  // ISO 20022 gateway: pacs.008 in, pacs.002 out. The UETR becomes the kernel instruction id, so a
+  // resubmitted message is recognised as a duplicate (exactly-once, within the kernel's dedup window).
+  pacs008(xml) {
+    let m;
+    try {
+      m = parsePacs008(xml);
+    } catch (e) {
+      if (!(e instanceof IsoError)) throw e;
+      return buildPacs002({ settled: false, error: 'NARR', message: `invalid message: ${e.message}` });
+    }
+    let r;
+    try {
+      r = this.pay(m.debtor.account, m.creditor.account, centsOf(m.amount), { instId: m.uetr });
+    } catch (e) {
+      r = { ok: false, error: 'UNKNOWN_ACCOUNT', message: 'unknown account' };
+    }
+    const block = this.blocks[this.blocks.length - 1];
+    return buildPacs002({ msgId: m.msgId, endToEndId: m.endToEndId, uetr: m.uetr, settled: !!r.ok, error: r.error, message: r.message, height: r.height, hash: r.ok ? this.blocks.find((b) => b.height === r.height).hash : block.hash, time: this.ledger.s.time });
   }
 
   dvp(sellerAcct, buyerAcct, secId, qty, cash) {
@@ -300,14 +406,16 @@ export class Network {
     switch (type) {
       case 'inflate': {
         // Simulates a kernel/contract defect: credit an account without a mint.
-        L.unsafeMutate((s) => (s.accounts.get('LKS:elm').balance += dollars(1_000_000)));
-        this.chaosState.inflated = (this.chaosState.inflated || 0n) + dollars(1_000_000);
+        this.store?.append({ unsafe: { kind: 'inflate', amount: dollars(1_000_000).toString() } });
+        this.#applyUnsafe({ kind: 'inflate', amount: dollars(1_000_000).toString() });
         const b = this.heartbeat();
         return { ok: true, height: b.height, message: 'injected $1,000,000 of tokens with no mint (a ledger defect). The end-of-block hook decides what happens.' };
       }
       case 'repair': {
-        if (this.chaosState.inflated) L.unsafeMutate((s) => (s.accounts.get('LKS:elm').balance -= this.chaosState.inflated));
-        this.chaosState.inflated = 0n;
+        if (this.chaosState.inflated) {
+          this.store?.append({ unsafe: { kind: 'repair', amount: this.chaosState.inflated.toString() } });
+          this.#applyUnsafe({ kind: 'repair', amount: this.chaosState.inflated.toString() });
+        }
         const b = this.heartbeat();
         return { ok: true, height: b.height, message: 'state repaired (defect patched). Resume still needs the co-signatures.' };
       }
