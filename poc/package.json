@@ -1,0 +1,13 @@
+{
+  "name": "concord-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Concord Network proof of concept: par kernel, atomic settlement, graded halt, live dashboard. No dependencies.",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "bench": "node src/bench.js"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concord Proof of Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Libre+Franklin:wght@400;500;600&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #101823; --slate: #41505F; --paper: #EEF0F2; --card: #FFFFFF; --hair: #D6DBE1;
+  --brass: #A8792C; --brass-text: #886220;
+  --ok: #2F7D5D; --warn: #8A6410; --bad: #A23A2E;
+  --ok-bg: #E4F1EB; --warn-bg: #F6EDD6; --bad-bg: #F6E3E0;
+  --display: 'Newsreader', Georgia, serif; --body: 'Libre Franklin', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #EEF0F2; --slate: #A9B4BF; --paper: #101823; --card: #182230; --hair: #2B3949;
+    --brass-text: #DABF8A; --ok: #6FC3A0; --warn: #DDB45A; --bad: #E58A7E;
+    --ok-bg: #16332A; --warn-bg: #3A2F14; --bad-bg: #40201C;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px 48px; }
+header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 0 14px; border-bottom: 1px solid var(--hair); }
+.mark { display: flex; align-items: center; gap: 12px; }
+.mark svg { width: 34px; height: 34px; }
+h1 { font: 600 26px/1 var(--display); margin: 0; letter-spacing: 0.2px; }
+.sub { color: var(--slate); font-size: 13px; }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font: 500 12px var(--mono); border: 1px solid currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-bg); } .pill.warn { color: var(--warn); background: var(--warn-bg); } .pill.bad { color: var(--bad); background: var(--bad-bg); }
+.mono { font-family: var(--mono); font-size: 12.5px; }
+.muted { color: var(--slate); }
+.banner { margin: 14px 0 0; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--bad); background: var(--bad-bg); color: var(--ink); }
+.banner b { color: var(--bad); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+.main { display: grid; grid-template-columns: 1.05fr 1fr; gap: 14px; margin-top: 14px; align-items: start; }
+@media (max-width: 980px) { .grid3, .main { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--hair); border-radius: 10px; padding: 14px 16px; }
+.card h2 { font: 600 17px var(--display); margin: 0 0 2px; }
+.card .rule { height: 2px; width: 28px; background: var(--brass); margin: 6px 0 10px; border: 0; }
+.card.q { border-color: var(--warn); } .card.h { border-color: var(--bad); }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13.5px; }
+.kv span:nth-child(odd) { color: var(--slate); }
+.kv .n { font-family: var(--mono); font-size: 13px; text-align: right; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+th { text-align: left; font-weight: 500; color: var(--slate); font-size: 12px; border-bottom: 1px solid var(--hair); padding: 4px 0; }
+td { padding: 4px 0; border-bottom: 1px solid var(--hair); vertical-align: top; }
+td.r, th.r { text-align: right; font-family: var(--mono); font-size: 12.5px; padding-left: 14px; white-space: nowrap; }
+.tag { font: 500 11px var(--mono); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--hair); color: var(--slate); }
+.tag.bad { color: var(--bad); border-color: var(--bad); }
+.actions { display: grid; gap: 12px; }
+fieldset { border: 1px solid var(--hair); border-radius: 8px; padding: 10px 12px 12px; margin: 0; }
+legend { font: 600 13px var(--body); padding: 0 6px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+select, input[type=text], input[type=number] { font: 13px var(--body); padding: 6px 8px; border: 1px solid var(--hair); border-radius: 6px; background: var(--card); color: var(--ink); min-width: 0; }
+input[type=text], input[type=number] { width: 110px; }
+button { font: 500 13px var(--body); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
+button:hover { opacity: .88; } button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+button.ghost { background: transparent; color: var(--ink); border-color: var(--hair); }
+button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+button.go { background: transparent; color: var(--ok); border-color: var(--ok); }
+.hint { font-size: 12px; color: var(--slate); margin-top: 6px; }
+.inv { display: grid; grid-template-columns: 44px 1fr auto; gap: 2px 10px; padding: 7px 0; border-bottom: 1px solid var(--hair); align-items: start; }
+.inv:last-child { border: 0; }
+.inv .id { font: 600 13px var(--mono); }
+.inv .nm { font-weight: 600; font-size: 13.5px; } .inv .ru { color: var(--slate); font-size: 12.5px; }
+.blocks { max-height: 420px; overflow: auto; }
+.blk { padding: 7px 0; border-bottom: 1px solid var(--hair); font-size: 12.5px; }
+.blk .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.blk .h { font: 600 13px var(--mono); }
+.log { margin-top: 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--hair); background: var(--card); font-size: 13.5px; min-height: 44px; }
+.log.ok { border-color: var(--ok); } .log.bad { border-color: var(--bad); }
+.log b { font-family: var(--mono); font-size: 12.5px; }
+.scroll-x { overflow-x: auto; }
+footer { margin-top: 18px; color: var(--slate); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">
+      <svg viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="9" fill="none" stroke="currentColor" stroke-width="2"/><rect x="9" y="11" width="16" height="4" rx="1" fill="#A8792C"/><rect x="9" y="19" width="16" height="4" rx="1" fill="#A8792C"/></svg>
+      <div><h1>Concord</h1><div class="sub">Tokenized deposit network · proof of concept</div></div>
+    </div>
+    <div class="spacer"></div>
+    <span id="statusPill" class="pill ok">LIVE</span>
+    <span class="mono muted" id="hdrMeta"></span>
+  </header>
+
+  <div id="banner"></div>
+
+  <div class="grid3" id="issuers"></div>
+
+  <div class="main">
+    <div class="actions" id="actions"></div>
+    <div>
+      <div class="card"><h2>Par invariants</h2><hr class="rule"><div id="invs"></div></div>
+      <div class="card" style="margin-top:14px"><h2>Blocks</h2><hr class="rule"><div class="blocks" id="blocks"></div></div>
+    </div>
+  </div>
+
+  <div class="log" id="log" role="status" aria-live="polite">Ready. Try a cross-bank payment, then break something.</div>
+
+  <footer>
+    Single-process kernel with real Ed25519 signatures and a <em>simulated</em> four-validator quorum (n=4, f=1). Not a bank, not a payment system, and not consensus. Bank names and figures are fictional.
+    <span id="stateRoot" class="mono"></span>
+  </footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+};
+const fmt = (c) => { c = BigInt(c); const neg = c < 0n; if (neg) c = -c; return (neg ? '-' : '') + '$' + (c / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + (c % 100n).toString().padStart(2, '0'); };
+let S = null;
+let form = {}; // remembered form values across re-renders
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+  return r.json();
+}
+function say(res, label) {
+  const ok = res.ok !== false && !res.error;
+  const log = $('#log');
+  log.className = 'log ' + (ok ? 'ok' : 'bad');
+  log.replaceChildren(el('span', {}, ok ? '✓ Accepted. ' : '✗ Rejected. '), label ? el('span', {}, label + ' ') : '', res.error ? el('b', {}, res.error + ' ') : '', res.message ? el('span', {}, res.message) : '', res.stage && !res.message ? el('span', { class: 'muted' }, `(${res.stage})`) : '', res.height ? el('span', { class: 'mono muted' }, `  block #${res.height}`) : '');
+}
+async function act(body, label) {
+  const res = await api('/api/action', body);
+  say(res, label);
+  await refresh();
+}
+
+function statusOf() {
+  if (S.halt) return ['bad', 'NETWORK HALTED'];
+  const q = S.issuers.filter((i) => i.status !== 'ACTIVE');
+  if (q.length) return ['warn', `QUARANTINE · ${q.map((i) => i.id).join(', ')}`];
+  return ['ok', 'LIVE'];
+}
+
+function renderHeader() {
+  const [cls, txt] = statusOf();
+  const p = $('#statusPill'); p.className = 'pill ' + cls; p.textContent = (cls === 'ok' ? '● ' : cls === 'warn' ? '▲ ' : '■ ') + txt;
+  $('#hdrMeta').textContent = `block #${S.height} · n=${S.validators.n}, f=${S.validators.f}, quorum ${S.validators.quorum} · cap ${fmt(S.params.maxTx)}/instruction`;
+  $('#stateRoot').textContent = ' · state root ' + S.stateRoot.slice(0, 16) + '…';
+  const b = $('#banner'); b.replaceChildren();
+  if (S.halt) {
+    b.append(el('div', { class: 'banner', role: 'alert' },
+      el('b', {}, 'Network halted: ' + S.halt.reason + (S.halt.issuer ? ` (${S.halt.issuer})` : '') + ' at block #' + S.halt.height + '. '),
+      'Settlement has stopped; consensus has not (blocks keep committing, reads work). Resume needs both governance keys, the Bank of Canada observer key, and the invariants must hold again.'));
+  } else if (S.issuers.some((i) => i.status !== 'ACTIVE')) {
+    b.append(el('div', { class: 'banner', style: 'border-color:var(--warn);background:var(--warn-bg)', role: 'status' },
+      el('b', { style: 'color:var(--warn)' }, 'Issuer quarantine. '),
+      'Only the quarantined issuer is frozen for minting, redeeming and outbound payments. Everyone else keeps settling. Unresolved after 15 minutes it escalates to a network halt.'));
+  }
+}
+
+function renderIssuers() {
+  const root = $('#issuers'); root.replaceChildren();
+  for (const i of S.issuers) {
+    const st = i.status !== 'ACTIVE';
+    const inflight = BigInt(i.H) + BigInt(i.R) + BigInt(i.In);
+    root.append(el('div', { class: 'card' + (st ? ' q' : '') },
+      el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:8px' }, el('h2', {}, i.name), el('span', { class: 'tag' + (st ? ' bad' : '') }, i.status === 'ACTIVE' ? 'ACTIVE' : 'QUARANTINED')),
+      el('hr', { class: 'rule' }),
+      el('div', { class: 'kv' },
+        el('span', {}, 'Token supply on ledger'), el('span', { class: 'n' }, fmt(i.S)),
+        el('span', {}, 'Core control balance'), el('span', { class: 'n' }, fmt(i.L)),
+        el('span', {}, 'In flight (core catching up)'), el('span', { class: 'n' }, inflight === 0n ? '—' : fmt(inflight)),
+        el('span', {}, 'Settlement position'), el('span', { class: 'n' }, fmt(i.sp)),
+        el('span', {}, 'Central-bank funds (outside)'), el('span', { class: 'n' }, fmt(i.cbBalance))),
+      i.quarantine ? el('div', { class: 'hint' }, 'Reason: ' + i.quarantine.reason) : null,
+      el('div', { class: 'scroll-x' }, el('table', {},
+        el('tr', {}, el('th', {}, 'Customer'), el('th', { class: 'r' }, 'Deposit (core)'), el('th', { class: 'r' }, 'Token')),
+        i.customers.map((c) => el('tr', {},
+          el('td', {}, c.name, c.sanctioned ? el('span', { class: 'tag bad', style: 'margin-left:6px' }, 'SANCTIONED') : '', Object.entries(c.sec).filter(([, q]) => q !== '0').map(([k, q]) => el('div', { class: 'muted mono' }, `${q} × ${k}`))),
+          el('td', { class: 'r' }, fmt(c.ordinary)), el('td', { class: 'r' }, fmt(c.token))))))));
+  }
+}
+
+function sel(name, options, def) {
+  const s = el('select', { 'aria-label': name, onchange: (e) => (form[name] = e.target.value) }, options.map(([v, t]) => el('option', { value: v, selected: (form[name] || def) === v }, t)));
+  form[name] = form[name] || def; return s;
+}
+function amt(name, def) {
+  return el('input', { type: 'text', inputmode: 'decimal', 'aria-label': name, value: form[name] ?? def, oninput: (e) => (form[name] = e.target.value) });
+}
+
+function renderActions() {
+  const accts = S.issuers.flatMap((i) => i.customers.map((c) => [`${i.id}:${c.id}`, `${c.name} · ${i.id}`]));
+  const custs = S.issuers.flatMap((i) => i.customers.filter((c) => !c.sanctioned).map((c) => [`${i.id}|${c.id}`, `${c.name} · ${i.id}`]));
+  const issuers = S.issuers.map((i) => [i.id, i.name]);
+  const root = $('#actions'); root.replaceChildren();
+  const val = (k, d) => form[k] ?? d;
+
+  root.append(el('fieldset', {}, el('legend', {}, '1 · Pay across banks (atomic, at par)'),
+    el('div', { class: 'row' }, sel('payFrom', accts, 'MPL:acme'), '→', sel('payTo', accts, 'NSR:cedar'), amt('payAmt', '25000'),
+      el('label', { class: 'muted' }, el('input', { type: 'checkbox', checked: !!form.payQueue, onchange: (e) => (form.payQueue = e.target.checked) }), ' queue if short')),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => act({ kind: 'pay', from: val('payFrom', 'MPL:acme'), to: val('payTo', 'NSR:cedar'), amount: val('payAmt', '25000'), queue: !!form.payQueue }, 'Payment.') }, 'Pay'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'net' }, 'Netting cycle.') }, `Run netting cycle${S.queue.length ? ` (${S.queue.length} queued)` : ''}`)),
+    el('div', { class: 'hint' }, 'Debit at one bank, credit at the other, settlement positions move 1:1, or nothing happens. Try paying Shadow Trading (sanctioned).'),
+    S.queue.length ? el('div', { class: 'hint' }, 'Queued (nothing debited yet): ' + S.queue.map((q) => `${q.from}→${q.to} ${fmt(q.amount)}`).join(' · ')) : null));
+
+  root.append(el('fieldset', {}, el('legend', {}, '2 · Deposit ⇄ token (mint / redeem)'),
+    el('div', { class: 'row' }, sel('mintWho', custs, 'MPL|acme'), amt('mintAmt', '50000')),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => { const [i, c] = val('mintWho', 'MPL|acme').split('|'); act({ kind: 'mint', issuer: i, customer: c, amount: val('mintAmt', '50000') }, 'Mint.'); } }, 'Mint from deposit'),
+      el('button', { class: 'ghost', onclick: () => { const [i, c] = val('mintWho', 'MPL|acme').split('|'); act({ kind: 'redeem', issuer: i, customer: c, amount: val('mintAmt', '50000') }, 'Redeem.'); } }, 'Redeem to deposit')),
+    el('div', { class: 'hint' }, 'Mint: the bank’s core holds the deposit first, the ledger mints second, so supply never exceeds backing. Redeem is the reverse.')));
+
+  root.append(el('fieldset', {}, el('legend', {}, '3 · Delivery versus payment (bond for cash)'),
+    el('div', { class: 'row' }, 'Harbour sells', el('input', { type: 'number', min: 1, value: val('dvpQty', 10), style: 'width:70px', 'aria-label': 'bond quantity', oninput: (e) => (form.dvpQty = e.target.value) }), '× CAN-2031 to Pinnacle for', amt('dvpCash', '10000')),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => act({ kind: 'dvp', seller: 'MPL:harbour', buyer: 'NSR:pinnacle', qty: val('dvpQty', 10), cash: val('dvpCash', '10000') }, 'DvP.') }, 'Settle DvP'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'dvp', seller: 'MPL:harbour', buyer: 'NSR:pinnacle', qty: 5000, cash: '10' }, 'DvP with more bonds than Harbour holds.') }, 'Try to sell bonds it does not own')),
+    el('div', { class: 'hint' }, 'Both legs land in one block or neither does.')));
+
+  root.append(el('fieldset', {}, el('legend', {}, '4 · Settlement position (prefunded with central-bank money)'),
+    el('div', { class: 'row' }, sel('spWho', issuers, 'MPL'), amt('spAmt', '100000')),
+    el('div', { class: 'row' },
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'fund', issuer: val('spWho', 'MPL'), amount: val('spAmt', '100000') }, 'Fund position.') }, 'Fund position'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'defund', issuer: val('spWho', 'MPL'), amount: val('spAmt', '100000') }, 'Defund position.') }, 'Defund'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'defund', issuer: val('spWho', 'MPL'), amount: fmt(S.issuers.find((i) => i.id === val('spWho', 'MPL')).sp).replace(/[$,]/g, '') }, 'Drain position.') }, 'Drain all')),
+    el('div', { class: 'hint' }, 'A payer can only send what its position covers. Drain it, then pay: it is refused, or queued for netting.')));
+
+  root.append(el('fieldset', {}, el('legend', {}, '5 · Break things'),
+    el('div', { class: 'row' },
+      el('button', { class: 'danger', onclick: () => act({ kind: 'chaos', type: 'inflate' }, 'Ledger defect.') }, 'Ledger defect: unminted tokens'),
+      el('button', { class: 'danger', onclick: () => act({ kind: 'chaos', type: 'core_loss', issuer: 'MPL' }, 'Core data loss.') }, 'Core loses 30% of its balance'),
+      el('button', { class: 'danger', onclick: () => act({ kind: 'chaos', type: 'core_restore', issuer: 'NSR' }, 'Core restored from backup.') }, 'Core restored from old backup'),
+      el('button', { class: 'danger', onclick: () => act({ kind: 'chaos', type: 'fire_alarm', issuer: 'LKS' }, 'Fire alarm.') }, 'Observer pulls fire alarm')),
+    el('div', { class: 'row' },
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'chaos', type: 'unbacked_mint' }, 'Attack.') }, 'Unbacked mint'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'chaos', type: 'forged_sig' }, 'Attack.') }, 'Forged signature'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'chaos', type: 'overdraft' }, 'Attack.') }, 'Overdraft'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'chaos', type: 'replay' }, 'Attack.') }, 'Replay'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'chaos', type: 'over_cap' }, 'Attack.') }, 'Over the cap')),
+    el('div', { class: 'row' },
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'corePause', on: !S.corePaused }, 'Core posting.') }, S.corePaused ? 'Resume core posting' : 'Pause core posting (slow core)'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'advance', seconds: 960 }, 'Clock.') }, 'Advance clock 16 min')),
+    el('div', { class: 'hint' }, 'Red buttons corrupt state or the core; grey buttons are attacks the kernel must refuse. Pause the core, pay across banks, then advance the clock: the in-flight amounts age into a quarantine.')));
+
+  root.append(el('fieldset', {}, el('legend', {}, '6 · Recover'),
+    el('div', { class: 'row' },
+      el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'repair' }, 'Patch.') }, 'Patch the ledger defect'),
+      el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'reattest', issuer: 'MPL' }, 'Reconcile.') }, 'Maple re-attests true balance'),
+      el('button', { class: 'go', onclick: () => act({ kind: 'resume', scope: 'network' }, 'Resume network.') }, 'Resume network'),
+      ...S.issuers.filter((i) => i.status !== 'ACTIVE').map((i) => el('button', { class: 'go', onclick: () => act({ kind: 'resume', scope: 'issuer', issuer: i.id }, `Resume ${i.id}.`) }, `Resume ${i.id}`))),
+    el('div', { class: 'row' },
+      el('button', { class: 'ghost', onclick: async () => { const r = await api('/api/verify'); say({ ok: r.ok, error: r.ok ? '' : 'REPLAY_MISMATCH', message: r.ok ? `Replayed ${r.blocks} blocks from genesis: identical state root ${r.stateRoot.slice(0, 16)}…` : 'An independent replay from genesis disagrees with the live state: something changed state outside the transaction log.' }, 'Verify.'); } }, 'Verify: replay from genesis'),
+      el('button', { class: 'ghost', onclick: async () => { say({ ok: true, message: 'Running 20,000 signed instructions through the kernel…' }); const r = await api('/api/bench'); say({ ok: r.invariantsHold, error: r.invariantsHold ? '' : 'INVARIANT', message: `${r.instructionsPerSecond.toLocaleString()} instructions/s (median block ${r.blockMsMedian} ms for ${r.blockSize}), all ${r.accepted.toLocaleString()} accepted, invariants hold. ${r.caveat}` }, 'Benchmark.'); } }, 'Benchmark kernel'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'reset' }, 'Reset.') }, 'Reset to genesis'))));
+}
+
+function renderInvariants() {
+  const root = $('#invs'); root.replaceChildren();
+  const icon = { ok: ['✓', 'ok', 'holds'], enforced: ['⛨', 'ok', 'enforced per instruction'], warning: ['▲', 'warn', 'issuer quarantined'], violated: ['■', 'bad', 'VIOLATED'], halted: ['■', 'bad', 'HALTED'] };
+  for (const v of S.invariants) {
+    const [ic, cls, txt] = icon[v.status] || icon.ok;
+    root.append(el('div', { class: 'inv' },
+      el('div', { class: 'id' }, v.id),
+      el('div', {}, el('div', { class: 'nm' }, v.name), el('div', { class: 'ru' }, v.rule), v.detail ? el('div', { class: 'ru mono' }, v.detail) : null, el('div', { class: 'ru' }, 'On break → ' + v.response)),
+      el('span', { class: 'pill ' + cls }, `${ic} ${txt}`)));
+  }
+  root.append(el('div', { class: 'hint' }, `Anchor total ${fmt(S.anchor.A)} = Σ positions ${fmt(S.anchor.spSum)} · ${S.accepted} accepted / ${S.rejectedTotal} rejected instructions`));
+}
+
+function renderBlocks() {
+  const root = $('#blocks'); root.replaceChildren();
+  for (const b of S.blocks) {
+    root.append(el('div', { class: 'blk' },
+      el('div', { class: 'top' }, el('span', { class: 'h' }, '#' + b.height), el('span', { class: 'mono muted' }, b.hash.slice(0, 12) + '…'),
+        el('span', { class: 'tag' + (b.receiptOk ? '' : ' bad') }, `${b.finalSigs}/4 sigs · ${b.receiptOk ? 'final' : 'NOT FINAL'}`),
+        b.halt ? el('span', { class: 'tag bad' }, 'HALT ' + b.halt.reason) : null),
+      b.txs.length === 0 ? el('div', { class: 'muted' }, 'heartbeat (empty block)') : b.txs.map((t) => el('div', {}, t.ok ? '✓ ' : '✗ ', el('b', { class: 'mono' }, t.type), t.ok ? el('span', { class: 'muted' }, ' ' + [...new Set(t.events)].filter((e) => !/CLOSED/.test(e)).join(', ')) : el('span', { style: 'color:var(--bad)' }, ' ' + t.error)))));
+  }
+}
+
+async function refresh() {
+  S = await api('/api/state');
+  const active = document.activeElement;
+  const keep = active && active.getAttribute && active.getAttribute('aria-label');
+  renderHeader(); renderIssuers(); renderActions(); renderInvariants(); renderBlocks();
+  if (keep) { const e = document.querySelector(`[aria-label="${keep}"]`); if (e && e !== document.activeElement) e.focus(); }
+}
+refresh();
+try { new EventSource('/events').onmessage = () => { if (!document.activeElement || !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) refresh(); }; } catch {}
+setInterval(() => { if (!document.activeElement || !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) refresh(); }, 3000);
+</script>
+</body>
+</html>
