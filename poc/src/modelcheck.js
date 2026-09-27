@@ -51,10 +51,12 @@ function key(net) {
     banks: Object.values(net.banks).map((b) => [b.controlGL, b.cbBalance, [...b.customers.values()].map((c) => c.ordinary)]),
     tasks: net.coreTasks.map((t) => [t.kind, t.issuer, t.amount, !!t.posted]),
     paused: net.corePaused,
+    escrows: [...net.ledger.s.escrows].map(([k, v]) => [k, v.from, v.to, v.amount, v.eventName]),
+    sweeps: [...net.ledger.s.sweeps].map(([k, v]) => [k, v.from, v.to, v.keep]),
   });
 }
 // state as the safety properties see it (no ids)
-const coreState = (net) => canon({ a: net.ledger.s.accounts, i: net.ledger.s.issuers, an: net.ledger.s.anchor, q: net.ledger.s.queue });
+const coreState = (net) => canon({ a: net.ledger.s.accounts, i: net.ledger.s.issuers, an: net.ledger.s.anchor, q: net.ledger.s.queue, e: net.ledger.s.escrows, sw: net.ledger.s.sweeps });
 
 const totalMoney = (net) => {
   let t = net.ledger.s.anchor.A;
@@ -77,6 +79,34 @@ export const ACTIONS = [
     { name: `defund ${i} $1`, kind: 'legit', run: (net) => net.defund(i, dollars(1)) },
   ]),
   { name: 'net-cycle', kind: 'legit', run: (net) => net.netCycle() },
+  // Escrow (T4) / PayOnEvent (T5): 'e1' cross-issuer, 'e2' same-issuer and event-gated. Fixed ids
+  // reused at every explored state - re-locking an already-open id legitimately fails with
+  // ESCROW_EXISTS, which S2 already checks leaves state unchanged, exactly like any other legit
+  // action that happens not to apply from a given state.
+  { name: 'escrow lock e1 (cross-issuer) $1', kind: 'legit', run: (net) => net.escrowLock('MPL:acme', 'NSR:cedar', 'e1', dollars(1), { expiresAt: net.now() + 60 }) },
+  { name: 'escrow release e1', kind: 'legit', run: (net) => net.escrowRelease('e1') },
+  { name: 'escrow refund e1', kind: 'legit', run: (net) => net.escrowRefund('e1') },
+  { name: 'escrow lock e2 (same-issuer, event-gated) $1', kind: 'legit', run: (net) => net.escrowLock('MPL:acme', 'MPL:harbour', 'e2', dollars(1), { expiresAt: net.now() + 60, eventName: 'delivery' }) },
+  { name: 'event-release e2 delivery (correct)', kind: 'legit', run: (net) => net.eventRelease('e2', 'delivery') },
+  { name: 'ATTACK event-release e2 with the wrong oracle (inspection, not delivery)', kind: 'attack', run: (net) => net.eventRelease('e2', 'inspection') },
+  { name: 'escrow refund e2', kind: 'legit', run: (net) => net.escrowRefund('e2') },
+  // Standing/Sweep (T6): keep=$0 so any positive acme balance is swept, exercising the firing
+  // path from as many reachable states as possible.
+  { name: 'register sweep s1 (acme -> harbour, keep $0)', kind: 'legit', run: (net) => net.registerSweep('s1', 'MPL:acme', 'MPL:harbour', 0n) },
+  { name: 'cancel sweep s1', kind: 'legit', run: (net) => net.cancelSweep('s1') },
+  // Batch (T7): two independently-valid legs in one atomic instruction. Deliberately NOT a
+  // mirrored pair ($1 then $2, not $1 then $1): a same-amount round trip would make the second
+  // leg's settlement-position requirement always exactly satisfied by the first leg's own
+  // cross-issuer contribution, which would hide an atomicity bug rather than exercise it (found
+  // by hand while testing roadmap 2.2's planted "earlier leg not rolled back" mutation).
+  {
+    name: 'batch: pay acme->cedar $1, pay cedar->acme $2',
+    kind: 'legit',
+    run: (net) => net.batch([
+      net.tx('PAYMENT', { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(1).toString(), queueIfShort: false }, ['ops:MPL', 'screen:MPL', 'accept:NSR']),
+      net.tx('PAYMENT', { from: 'NSR:cedar', to: 'MPL:acme', amount: dollars(2).toString(), queueIfShort: false }, ['ops:NSR', 'screen:NSR', 'accept:MPL']),
+    ]),
+  },
   { name: 'pause core', kind: 'env', run: (net) => net.setCorePaused(true) },
   { name: 'unpause core (drain)', kind: 'env', run: (net) => net.setCorePaused(false) },
   // adversarial actions: must always be rejected and must never change state
@@ -92,7 +122,9 @@ export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {} } =
   // so the reachable state space is finite.
   const net = new Network({ bare: true });
   const kyc = net.now() + 10 * 365 * 86400;
-  for (const [i, c] of [['MPL', 'acme'], ['NSR', 'cedar']]) net.submit([net.tx('OPEN_ACCOUNT', { issuer: i, holderRef: c, kycRef: 'k', kycExpires: kyc }, [`ops:${i}`])]);
+  // 'harbour' at MPL exists only so a SAME-issuer Escrow/Sweep has a second account to move to -
+  // it is not added to ACCTS, so it does not multiply the combinatorics of the existing actions.
+  for (const [i, c] of [['MPL', 'acme'], ['MPL', 'harbour'], ['NSR', 'cedar']]) net.submit([net.tx('OPEN_ACCOUNT', { issuer: i, holderRef: c, kycRef: 'k', kycExpires: kyc }, [`ops:${i}`])]);
   for (const [i, c] of [['MPL', 'acme'], ['NSR', 'cedar']]) {
     net.banks[i].customer(c).ordinary = dollars(4);
     net.banks[i].cbBalance = dollars(4);

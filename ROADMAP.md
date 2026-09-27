@@ -157,7 +157,7 @@ existing `#endOfBlock` hook.
 
 ## Priority 2 — keep the honesty file honest
 
-### [ ] 2.1 Extend the model checker's coverage to the four new templates
+### [x] 2.1 Extend the model checker's coverage to the four new templates
 
 `poc/docs/invariant-charter.md` states the model checker found no violation
 "across 40,000 states / 377,678 transitions (depth 8)" for the *existing*
@@ -167,21 +167,21 @@ checker's action alphabet would make that claim stale and wrong.
 **Depends on:** 1.1–1.4 (all four templates must exist first).
 
 **Acceptance criteria**
-- [ ] `modelcheck.js`'s action alphabet includes at least one instance each of
+- [x] `modelcheck.js`'s action alphabet includes at least one instance each of
       Escrow lock/release/refund, event-release (correct and wrong-oracle),
       a two-leg batch, and sweep register/fire/cancel.
-- [ ] The extended run completes in a bounded time (document the new
+- [x] The extended run completes in a bounded time (document the new
       state/transition counts next to the old ones — do not silently drop the
       depth or alphabet size to make it finish faster) and finds no
       unexpected violation. If it *does* find one, that is a real kernel bug:
       fix the kernel, not the model, and say so in the commit message.
-- [ ] `poc/docs/invariant-charter.md`'s numbers and "What is NOT checked"
+- [x] `poc/docs/invariant-charter.md`'s numbers and "What is NOT checked"
       section are updated to describe the new, larger bound honestly (do not
       claim more than what was actually run).
-- [ ] `npm test` stays green (the model check is already a test; it now
+- [x] `npm test` stays green (the model check is already a test; it now
       covers more).
 
-### [ ] 2.2 Widen mutation testing beyond four planted bugs
+### [x] 2.2 Widen mutation testing beyond four planted bugs
 
 The charter says plainly: "Mutation testing is only four planted bugs... it
 does not bound what it would miss." Each new template is exactly the kind of
@@ -190,15 +190,15 @@ new surface a planted bug could hide in.
 **Depends on:** 1.1–1.4.
 
 **Acceptance criteria**
-- [ ] At least three new planted-bug mutations are added, each in a new
+- [x] At least three new planted-bug mutations are added, each in a new
       template's handler (e.g., "escrow release ignores the expiry check",
       "batch leg failure doesn't roll back an earlier leg", "sweep fires
       below keepAmount").
-- [ ] Each planted bug is caught by the model checker or a targeted test —
+- [x] Each planted bug is caught by the model checker or a targeted test —
       if a mutation is *not* caught, that is a real coverage gap: add the
       missing invariant or test, don't weaken the mutation.
-- [ ] The charter's mutation count and description are updated to match.
-- [ ] `npm test` stays green.
+- [x] The charter's mutation count and description are updated to match.
+- [x] `npm test` stays green.
 
 ## Priority 3 — reachability and documentation
 
@@ -260,6 +260,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 *(One line per completed item, newest last.)*
 
+- 2026-09-27 — Priority 2 (keep the honesty file honest). Added Network convenience wrappers for all four new templates first (`escrowLock`/`escrowRelease`/`eventRelease`/`escrowRefund`, `registerSweep`/`cancelSweep`, `batch()`), reused by both the model checker and (later) the dashboard. Extended `modelcheck.js`'s action alphabet 27 -> 37 and added a second same-issuer account, without touching the existing accounts' combinatorics. Added 3 planted-bug mutation tests (roadmap 2.2) for the new templates: an escrow-release-prints-money bug (caught by the existing **P1** invariant, no new checker code), a batch-leg-not-rolled-back bug (caught by the existing **S2** property), and a PayOnEvent wrong-oracle bug (caught by **S3**, after correctly reclassifying that model action from 'legit' to 'attack'). One real false start along the way, found and fixed, not hidden: the first version of the batch mutation test went undetected because the model's batch action used a same-amount mirror pair (pay $1 then pay $1 back), whose second leg is always self-funded by the first leg's own cross-issuer settlement contribution - fixed by using mismatched amounts ($1 then $2), confirmed by hand before changing the code. One honest non-generalizing finding recorded rather than forced: a sweep moving the wrong amount conserves total money and trips no P1-P7 formula, so only `sweep.test.js`'s own targeted tests would catch that class of bug. `poc/docs/invariant-charter.md` updated with real before/after state counts (27 actions/depth 8/40,000 states before; 37 actions/depth 5/3,560 states in the routine test; a one-off depth-6/12,181-state run for a deeper honest data point) and the new limitation. Full suite: 60/60 (was 54), ~44s (was ~16s) - not shrunk to look faster.
 - 2026-09-27 — 1.4 Standing/Sweep (registered same-issuer rule, fires at `#endOfBlock`, the same deterministic hook the graded halt already uses, so no separate submitted instruction is needed and it replays identically from the log). `executeBlock` and `Network#makeBlock` now surface `sweepFires` alongside `violations`. 6 new tests in `test/sweep.test.js`, written first and confirmed red first, including a hand-computed two-sweep cascade (elm/fjord, LKS) pinned to exact resulting balances, and a durable-store recovery test confirming a registered sweep survives a restart and keeps firing. All 6 passed on the first implementation attempt — the cascade math worked out by hand matched the code's actual output exactly. Priority 1 (all four launch-set templates: Escrow, PayOnEvent, Batch, Sweep) is now complete. Full suite: 54/54.
 - 2026-09-27 — 1.3 Batch (all-or-nothing legs) implemented: `#execTx`'s generic checks were already extracted into `#checkEnvelope` in the previous pass specifically for this, so `tx_BATCH` dispatches each leg to its own existing handler against the same top-level Journal and gets atomicity for free from `#execTx`'s existing rollback-on-error. 7 tests in `test/batch.test.js`, written first (red first: all 7 failed against the unmodified kernel). Two of my own test assumptions were wrong once the implementation existed — an escrow id with capital letters, and an expected same-issuer leg emitting cross-issuer CONVERT events it shouldn't — both fixed in the test, not the kernel; every atomicity, replay-protection and nesting-guard assertion passed on the first implementation attempt. Full suite: 48/48.
 - 2026-09-27 — 1.1 Escrow (lock/release/refund) and 1.2 PayOnEvent (event-gated release) implemented together in `kernel.js` (four new tx_ handlers, `escrows` state added to `stateView()`), `network.js` (named event-oracle keys in genesis and the dev keystore, serialized for recovery), and `test/escrow.test.js` (7 new tests, written before the code and confirmed red first). One real design bug found while writing tests, not just a test bug: ESCROW_RELEASE defaulted its release role to the payer even for event-gated escrows, which would have let a payer release their own PayOnEvent escrow unconditionally — fixed by requiring EVENT_RELEASE for any escrow with an eventName (`USE_EVENT_RELEASE`). Full suite: 41/41 passing (34 original + 7 new).
