@@ -16,7 +16,7 @@ Board-reviewed roadmap and technical implementation for the Concord tokenized-de
 
 ## Proof of concept (running)
 
-[poc/](poc/README.md) is a working model of the ledger kernel: atomic cross-bank settlement, DvP, netting, the P1–P7 invariants and the graded halt, with a live dashboard, durable crash-safe storage, an ISO 20022 gateway and an explicit-state model checker. 34 tests. See [poc/docs/invariant-charter.md](poc/docs/invariant-charter.md).
+[poc/](poc/README.md) is a working model of the ledger kernel: atomic cross-bank settlement, DvP, Escrow, PayOnEvent, Batch and Standing/Sweep (the spec's full launch-set templates, §2.5), netting, the P1–P7 invariants and the graded halt, with a live dashboard, durable crash-safe storage, an ISO 20022 gateway and an explicit-state model checker. 60 tests. See [poc/docs/invariant-charter.md](poc/docs/invariant-charter.md).
 
 ```
 cd ~/Concord/poc && npm test && npm start     # http://127.0.0.1:8787

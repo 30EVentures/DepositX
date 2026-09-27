@@ -225,20 +225,20 @@ stated purpose ("a live dashboard").
       one is out of scope here — see Blocked/needs input if it seems large
       enough to warrant its own item).
 
-### [ ] 3.2 Update README.md and poc/README.md
+### [x] 3.2 Update README.md and poc/README.md
 
 **Depends on:** everything above.
 
 **Acceptance criteria**
-- [ ] `poc/README.md`'s "What it demonstrates" table gains rows for the four
+- [x] `poc/README.md`'s "What it demonstrates" table gains rows for the four
       new templates, each pointing at the code and the test that proves it,
       matching the existing table's style exactly.
-- [ ] `poc/README.md`'s "What it is NOT" section is re-checked line by line:
+- [x] `poc/README.md`'s "What it is NOT" section is re-checked line by line:
       remove anything this pass fixed, leave everything else (most of it —
       real consensus, ZK, HSMs, a Rust port — is correctly still true).
-- [ ] Root `README.md`'s "Read in this order" / PoC description still
+- [x] Root `README.md`'s "Read in this order" / PoC description still
       accurately describes what `poc/` covers.
-- [ ] No claim is added anywhere that isn't backed by a passing test.
+- [x] No claim is added anywhere that isn't backed by a passing test.
 
 ## Blocked / needs input
 
@@ -260,6 +260,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 *(One line per completed item, newest last.)*
 
+- 2026-09-27 — 3.2: `poc/README.md`'s "What it demonstrates" table gained rows for Escrow, PayOnEvent, Batch and Sweep (each naming its code and test), the model-check row updated with the real 37-action/depth-5-and-6 numbers, and "What it is NOT" re-checked line by line (added the sweep-safety-property limitation, updated the account count; everything else there is still correctly true - real consensus, ZK, HSMs and a Rust port remain out of scope). Root `README.md`'s PoC description and test count updated too. Test-count and timing lines that were stale (34 tests, depth-8 ~6 min) are now accurate (60 tests ~45s, depth-6 ~100s). No functional code changed; no test re-run needed.
 - 2026-09-27 — Priority 2 (keep the honesty file honest). Added Network convenience wrappers for all four new templates first (`escrowLock`/`escrowRelease`/`eventRelease`/`escrowRefund`, `registerSweep`/`cancelSweep`, `batch()`), reused by both the model checker and (later) the dashboard. Extended `modelcheck.js`'s action alphabet 27 -> 37 and added a second same-issuer account, without touching the existing accounts' combinatorics. Added 3 planted-bug mutation tests (roadmap 2.2) for the new templates: an escrow-release-prints-money bug (caught by the existing **P1** invariant, no new checker code), a batch-leg-not-rolled-back bug (caught by the existing **S2** property), and a PayOnEvent wrong-oracle bug (caught by **S3**, after correctly reclassifying that model action from 'legit' to 'attack'). One real false start along the way, found and fixed, not hidden: the first version of the batch mutation test went undetected because the model's batch action used a same-amount mirror pair (pay $1 then pay $1 back), whose second leg is always self-funded by the first leg's own cross-issuer settlement contribution - fixed by using mismatched amounts ($1 then $2), confirmed by hand before changing the code. One honest non-generalizing finding recorded rather than forced: a sweep moving the wrong amount conserves total money and trips no P1-P7 formula, so only `sweep.test.js`'s own targeted tests would catch that class of bug. `poc/docs/invariant-charter.md` updated with real before/after state counts (27 actions/depth 8/40,000 states before; 37 actions/depth 5/3,560 states in the routine test; a one-off depth-6/12,181-state run for a deeper honest data point) and the new limitation. Full suite: 60/60 (was 54), ~44s (was ~16s) - not shrunk to look faster.
 - 2026-09-27 — 1.4 Standing/Sweep (registered same-issuer rule, fires at `#endOfBlock`, the same deterministic hook the graded halt already uses, so no separate submitted instruction is needed and it replays identically from the log). `executeBlock` and `Network#makeBlock` now surface `sweepFires` alongside `violations`. 6 new tests in `test/sweep.test.js`, written first and confirmed red first, including a hand-computed two-sweep cascade (elm/fjord, LKS) pinned to exact resulting balances, and a durable-store recovery test confirming a registered sweep survives a restart and keeps firing. All 6 passed on the first implementation attempt — the cascade math worked out by hand matched the code's actual output exactly. Priority 1 (all four launch-set templates: Escrow, PayOnEvent, Batch, Sweep) is now complete. Full suite: 54/54.
 - 2026-09-27 — 1.3 Batch (all-or-nothing legs) implemented: `#execTx`'s generic checks were already extracted into `#checkEnvelope` in the previous pass specifically for this, so `tx_BATCH` dispatches each leg to its own existing handler against the same top-level Journal and gets atomicity for free from `#execTx`'s existing rollback-on-error. 7 tests in `test/batch.test.js`, written first (red first: all 7 failed against the unmodified kernel). Two of my own test assumptions were wrong once the implementation existed — an escrow id with capital letters, and an expected same-issuer leg emitting cross-issuer CONVERT events it shouldn't — both fixed in the test, not the kernel; every atomicity, replay-protection and nesting-guard assertion passed on the first implementation attempt. Full suite: 48/48.
