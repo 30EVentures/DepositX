@@ -24,6 +24,11 @@ const parseAmount = (s, code = 'BAD_AMOUNT') => {
   need(typeof s === 'string' && /^[1-9][0-9]{0,17}$/.test(s), code, `amount must be a positive integer string of cents, got ${s}`);
   return BigInt(s);
 };
+const parseNonNegAmount = (s, code = 'BAD_AMOUNT') => {
+  need(typeof s === 'string' && /^(0|[1-9][0-9]{0,17})$/.test(s), code, `amount must be a non-negative integer string of cents, got ${s}`);
+  return BigInt(s);
+};
+const ID_RE = /^[a-z0-9_-]{1,40}$/;
 
 export const MAX_TTL_S = 60; // valid_until must be within 60 s of block time
 export const INFLIGHT_MAX_AGE_S = 900; // open holds / pending core postings older than this quarantine the issuer
@@ -143,8 +148,11 @@ export class Ledger {
       halt: null,
       queue: [],
       dedup: new Map(),
+      escrows: new Map(), // escrowId -> {from, to, amount, expiresAt, releaseRole, eventName, escrowAccountId} (roadmap 1.1/1.2)
+      sweeps: new Map(), // sweepId -> {from, to, keep} — same-issuer standing rule, fires in #endOfBlock (roadmap 1.4)
     };
     this.lastViolations = [];
+    this.lastSweepFires = [];
   }
 
   // ---------------------------------------------------------------- keys & signatures
@@ -155,6 +163,7 @@ export class Ledger {
     if (kind === 'observer') return g.observer;
     if (kind === 'anchor') return g.anchor;
     if (kind === 'reconciler') return g.reconcilers[who];
+    if (kind === 'event') return g.eventOracles ? g.eventOracles[who] : undefined; // named oracle key, e.g. PayOnEvent's "delivery"
     const i = this.s.issuers.get(who);
     return i ? i.keys[kind === 'accept' ? 'ops' : kind] : undefined; // ops | mint | attest | screen; accept = payee issuer's ops key
   }
@@ -468,6 +477,95 @@ export class Ledger {
     events.push({ type: 'DVP_SETTLED', seller: seller.id, buyer: buyer.id, secId: p.secId, qty: qty.toString(), cash: cash.toString() });
   }
 
+  // Escrow (T4): the escrow account is a regular ledger account under a reserved id, created
+  // at the BENEFICIARY's issuer. LOCK is exactly a Transfer (same issuer) or a par-conserving
+  // Convert (cross issuer, via #moveCash) into that account, so no new conservation math is
+  // needed: total per-issuer supply is unaffected by lock+release or lock+refund. RELEASE and
+  // REFUND are then always same-issuer moves (escrow account -> beneficiary, or, for refund,
+  // escrow account -> original payer, which for a cross-issuer lock is a reverse Convert).
+  tx_ESCROW_LOCK(tx, time, j, events) {
+    const p = tx.payload;
+    const from = this.#live(p.from, time);
+    const to = this.#account(p.to);
+    need(typeof p.escrowId === 'string' && ID_RE.test(p.escrowId), 'BAD_ESCROW_ID');
+    need(!this.s.escrows.has(p.escrowId), 'ESCROW_EXISTS');
+    need(Number.isInteger(p.expiresAt) && p.expiresAt > time, 'BAD_EXPIRY');
+    const releaseRole = p.releaseRole || `ops:${from.issuer}`;
+    need(this.#pubFor(releaseRole) !== undefined, 'BAD_RELEASE_ROLE');
+    const eventName = p.eventName === undefined ? null : p.eventName;
+    if (eventName !== null) need(this.#pubFor(`event:${eventName}`) !== undefined, 'UNKNOWN_EVENT');
+    this.#sig(tx, `ops:${from.issuer}`);
+    this.#sig(tx, `screen:${from.issuer}`);
+    if (from.issuer !== to.issuer) this.#sig(tx, `accept:${to.issuer}`);
+    const x = parseAmount(p.amount);
+    this.#cap(x);
+    const escrowAcctId = `${to.issuer}:escrow:${p.escrowId}`;
+    if (!this.s.accounts.has(escrowAcctId)) {
+      // system-owned holding account: never expires, not reachable via OPEN_ACCOUNT's holder-ref rule
+      j.set(this.s.accounts, escrowAcctId, { id: escrowAcctId, issuer: to.issuer, holder: `escrow:${p.escrowId}`, balance: 0n, sec: new Map(), status: 'active', kycRef: '', kycExpires: Number.MAX_SAFE_INTEGER });
+    }
+    const escrowAcct = this.s.accounts.get(escrowAcctId);
+    this.#moveCash(j, from, escrowAcct, x, { instId: tx.inst_id, time, events });
+    j.set(this.s.escrows, p.escrowId, { from: from.id, to: to.id, amount: x, expiresAt: p.expiresAt, releaseRole, eventName, escrowAccountId: escrowAcctId });
+    events.push({ type: 'ESCROW_LOCKED', escrowId: p.escrowId, from: from.id, to: to.id, amount: x.toString(), eventGated: eventName !== null });
+  }
+
+  // Shared by ESCROW_RELEASE and EVENT_RELEASE: move the full escrowed amount to the
+  // beneficiary and close the record. Always same-issuer (see tx_ESCROW_LOCK above).
+  #releaseEscrow(rec, escrowId, time, j, events, eventType) {
+    const escrowAcct = this.#account(rec.escrowAccountId);
+    const to = this.#live(rec.to, time);
+    j.del(this.s.escrows, escrowId);
+    this.#debit(j, escrowAcct, rec.amount);
+    this.#credit(j, to, rec.amount);
+    events.push({ type: eventType, escrowId, to: to.id, amount: rec.amount.toString() });
+  }
+  tx_ESCROW_RELEASE(tx, time, j, events) {
+    const p = tx.payload;
+    const rec = this.s.escrows.get(p.escrowId);
+    need(rec, 'UNKNOWN_ESCROW');
+    // an event-gated escrow can ONLY be released by EVENT_RELEASE - otherwise the payer's own
+    // default releaseRole would let them release their own PayOnEvent escrow unconditionally,
+    // defeating the point of gating it on an event in the first place.
+    need(rec.eventName === null, 'USE_EVENT_RELEASE', 'this escrow is event-gated: use EVENT_RELEASE');
+    this.#sig(tx, rec.releaseRole);
+    this.#releaseEscrow(rec, p.escrowId, time, j, events, 'ESCROW_RELEASED');
+  }
+
+  // PayOnEvent (T5): the same escrow, released instead by a named oracle's signature over the
+  // matching event name — the escrow's own stored eventName is what gets signed for, so a
+  // signature for a different (even genuinely valid) event name can never release this escrow.
+  tx_EVENT_RELEASE(tx, time, j, events) {
+    const p = tx.payload;
+    const rec = this.s.escrows.get(p.escrowId);
+    need(rec, 'UNKNOWN_ESCROW');
+    need(rec.eventName !== null, 'NOT_EVENT_GATED');
+    need(p.event === rec.eventName, 'EVENT_MISMATCH');
+    this.#sig(tx, `event:${rec.eventName}`);
+    this.#releaseEscrow(rec, p.escrowId, time, j, events, 'ESCROW_EVENT_RELEASED');
+  }
+
+  // Refund: only after expiry (so an event that never fires does not trap funds forever), by
+  // the original payer's key. A cross-issuer lock reverses via the same par-conserving Convert
+  // path used at lock time; the beneficiary issuer's original "accept" already covers this.
+  tx_ESCROW_REFUND(tx, time, j, events) {
+    const p = tx.payload;
+    const rec = this.s.escrows.get(p.escrowId);
+    need(rec, 'UNKNOWN_ESCROW');
+    need(time >= rec.expiresAt, 'ESCROW_NOT_EXPIRED');
+    const from = this.#live(rec.from, time);
+    this.#sig(tx, `ops:${from.issuer}`);
+    const escrowAcct = this.#account(rec.escrowAccountId);
+    j.del(this.s.escrows, p.escrowId);
+    if (from.issuer === escrowAcct.issuer) {
+      this.#debit(j, escrowAcct, rec.amount);
+      this.#credit(j, from, rec.amount);
+    } else {
+      this.#moveCash(j, escrowAcct, from, rec.amount, { instId: tx.inst_id, time, events });
+    }
+    events.push({ type: 'ESCROW_REFUNDED', escrowId: p.escrowId, from: from.id, amount: rec.amount.toString() });
+  }
+
   // Liquidity-saving netting. Queued payments have debited nothing. A deterministic gridlock
   // resolution finds a maximal subset whose net effect fits every settlement position, then
   // settles that subset atomically. Unsettled instructions stay queued until they expire.
@@ -560,17 +658,25 @@ export class Ledger {
   }
 
   // ---------------------------------------------------------------- execution
+  // The generic checks every instruction gets, whether submitted at the top level or as one
+  // leg of a BATCH (T7): well-formed envelope, fresh inst_id (dedup), a real handler, and the
+  // halt gate. Returns the handler so the caller executes it against its own journal/events.
+  #checkEnvelope(tx, time) {
+    need(tx && typeof tx === 'object' && typeof tx.type === 'string', 'MALFORMED');
+    need(typeof tx.inst_id === 'string' && tx.inst_id.length >= 8 && tx.inst_id.length <= 64, 'BAD_INST_ID');
+    need(Number.isInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
+    need(!this.s.dedup.has(tx.inst_id), 'DUPLICATE_INSTRUCTION');
+    const h = this['tx_' + tx.type];
+    need(typeof h === 'function' && !tx.type.startsWith('_'), 'UNKNOWN_TYPE');
+    if (this.s.halt) need(['RESUME', 'ATTEST', 'REPORT_PAR_BREAK'].includes(tx.type), 'NETWORK_HALTED', `network halted: ${this.s.halt.reason}`);
+    return h;
+  }
+
   #execTx(tx, time) {
     const j = new Journal();
     const events = [];
     try {
-      need(tx && typeof tx === 'object' && typeof tx.type === 'string', 'MALFORMED');
-      need(typeof tx.inst_id === 'string' && tx.inst_id.length >= 8 && tx.inst_id.length <= 64, 'BAD_INST_ID');
-      need(Number.isInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
-      need(!this.s.dedup.has(tx.inst_id), 'DUPLICATE_INSTRUCTION');
-      const h = this['tx_' + tx.type];
-      need(typeof h === 'function' && !tx.type.startsWith('_'), 'UNKNOWN_TYPE');
-      if (this.s.halt) need(['RESUME', 'ATTEST', 'REPORT_PAR_BREAK'].includes(tx.type), 'NETWORK_HALTED', `network halted: ${this.s.halt.reason}`);
+      const h = this.#checkEnvelope(tx, time);
       h.call(this, tx, time, j, events);
       j.set(this.s.dedup, tx.inst_id, time);
       this.counters.accepted++;
@@ -675,6 +781,8 @@ export class Ledger {
       anchor: s.anchor,
       queue: s.queue,
       dedup: s.dedup,
+      escrows: s.escrows,
+      sweeps: s.sweeps,
       securities: s.securities,
       issuers: new Map([...s.issuers].map(([k, i]) => [k, { ...i, keys: undefined }])),
       accounts: new Map([...s.accounts].map(([k, a]) => [k, { ...a }])),

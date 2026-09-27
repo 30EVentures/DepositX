@@ -55,11 +55,11 @@ export class Network {
   #serializeKeys() {
     const K = this.K;
     const ex = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, exportKey(v)]));
-    return { issuers: Object.fromEntries(Object.entries(K.issuers).map(([id, o]) => [id, ex(o)])), gov: ex(K.gov), validators: ex(K.validators), observer: exportKey(K.observer), anchor: exportKey(K.anchor), recOperator: exportKey(K.rec.operator) };
+    return { issuers: Object.fromEntries(Object.entries(K.issuers).map(([id, o]) => [id, ex(o)])), gov: ex(K.gov), validators: ex(K.validators), observer: exportKey(K.observer), anchor: exportKey(K.anchor), recOperator: exportKey(K.rec.operator), event: ex(K.event) };
   }
   #deserializeKeys(o) {
     const im = (x) => Object.fromEntries(Object.entries(x).map(([k, v]) => [k, importKey(v)]));
-    const K = { issuers: Object.fromEntries(Object.entries(o.issuers).map(([id, x]) => [id, im(x)])), gov: im(o.gov), validators: im(o.validators), observer: importKey(o.observer), anchor: importKey(o.anchor), rec: { operator: importKey(o.recOperator) } };
+    const K = { issuers: Object.fromEntries(Object.entries(o.issuers).map(([id, x]) => [id, im(x)])), gov: im(o.gov), validators: im(o.validators), observer: importKey(o.observer), anchor: importKey(o.anchor), rec: { operator: importKey(o.recOperator) }, event: o.event ? im(o.event) : {} };
     K.rec.observer = K.observer;
     return K;
   }
@@ -85,6 +85,7 @@ export class Network {
     K.gov.neutral = genKey();
     K.observer = genKey(); // Bank of Canada supervisory node (non-voting)
     K.anchor = genKey(); // anchor gateway
+    K.event = { delivery: genKey(), inspection: genKey() }; // PayOnEvent (T5) named oracles
     K.rec.operator = genKey();
     K.rec.observer = K.observer; // the observer can also pull the fire alarm
     K.validators.operator = genKey();
@@ -98,6 +99,7 @@ export class Network {
       observer: K.observer.pub,
       anchor: K.anchor.pub,
       reconcilers: { operator: K.rec.operator.pub, observer: K.observer.pub },
+      eventOracles: Object.fromEntries(Object.entries(K.event).map(([name, k]) => [name, k.pub])),
       securities: [{ id: 'CAN-2031', name: 'Government of Canada 3.0% 2031 (illustrative)' }],
       validators: Object.entries(K.validators).map(([id, k]) => ({ id, pub: k.pub })),
     };
@@ -165,6 +167,7 @@ export class Network {
     if (kind === 'observer') return this.K.observer.priv;
     if (kind === 'anchor') return this.K.anchor.priv;
     if (kind === 'reconciler') return this.K.rec[who].priv;
+    if (kind === 'event') return this.K.event[who].priv;
     if (kind === 'accept') return this.K.issuers[who].ops.priv;
     return this.K.issuers[who][kind].priv;
   }

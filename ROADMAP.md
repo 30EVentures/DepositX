@@ -33,7 +33,7 @@ if the loop stops after any item, the tree is left green.
 
 ## Priority 1 — the four missing launch-set templates (§2.5)
 
-### [ ] 1.1 Escrow (T4): lock, release, refund
+### [x] 1.1 Escrow (T4): lock, release, refund
 
 **Design.** An escrow is a regular ledger account under a reserved id
 (`<issuer>:escrow:<escrowId>`) so it needs no new conservation math: `LOCK`
@@ -48,28 +48,28 @@ neither needs a second cross-issuer settlement move.
 **Depends on:** nothing new; reuses `#moveCash`, `#live`, `Journal`.
 
 **Acceptance criteria**
-- [ ] `tx_ESCROW_LOCK` creates the escrow account on first use, moves funds
+- [x] `tx_ESCROW_LOCK` creates the escrow account on first use, moves funds
       out of the payer's account, and is rejected if the payer's balance (or,
       cross-issuer, the payer issuer's settlement position) is insufficient —
       exactly like an existing Transfer/Payment would be.
-- [ ] `tx_ESCROW_RELEASE` requires the signature named at lock time (default:
+- [x] `tx_ESCROW_RELEASE` requires the signature named at lock time (default:
       the payer's `ops` key) and moves the full escrowed amount to the named
       beneficiary account; a second release of the same `escrowId` is
       rejected (`UNKNOWN_ESCROW`).
-- [ ] `tx_ESCROW_REFUND` is rejected before `expiresAt` and succeeds after it,
+- [x] `tx_ESCROW_REFUND` is rejected before `expiresAt` and succeeds after it,
       returning the full amount to the original payer account.
-- [ ] Total account-balance supply per issuer is unchanged by lock+release or
+- [x] Total account-balance supply per issuer is unchanged by lock+release or
       lock+refund (a property test asserts this over both same-issuer and
       cross-issuer cases).
-- [ ] A cross-issuer lock correctly moves settlement positions once (at lock,
+- [x] A cross-issuer lock correctly moves settlement positions once (at lock,
       via the existing Convert path); release/refund move no further
       settlement position, since money is already at the beneficiary's issuer.
-- [ ] `checkInvariants` (P1–P5) holds throughout; a fuzz or targeted test
+- [x] `checkInvariants` (P1–P5) holds throughout; a fuzz or targeted test
       exercises lock → release and lock → refund and confirms no violation.
-- [ ] `npm test` stays green; new tests added to `test/kernel.test.js` or a
+- [x] `npm test` stays green; new tests added to `test/kernel.test.js` or a
       new `test/escrow.test.js`.
 
-### [ ] 1.2 PayOnEvent (T5): release gated by a named oracle signature
+### [x] 1.2 PayOnEvent (T5): release gated by a named oracle signature
 
 **Design.** Reuses the Escrow account and lock/refund exactly; adds a second
 release path, `tx_EVENT_RELEASE`, which requires a signature from a named
@@ -82,21 +82,21 @@ confirmation" (§2.4, describing the CSD DvP case as the general pattern).
 refund handlers unchanged.
 
 **Acceptance criteria**
-- [ ] Genesis gains a named event-oracle keyset (at least one, e.g.
+- [x] Genesis gains a named event-oracle keyset (at least one, e.g.
       `delivery`), mirroring how `observer` and `anchor` are already
       single-purpose named keys.
-- [ ] `tx_EVENT_RELEASE` succeeds only with a valid signature from the named
+- [x] `tx_EVENT_RELEASE` succeeds only with a valid signature from the named
       oracle key, referencing the escrow by id and the event name it was
       locked against; a release attempt signed by any other key (including
       the payer's own `ops` key) is rejected.
-- [ ] An escrow locked for event `X` cannot be released by an event-release
+- [x] An escrow locked for event `X` cannot be released by an event-release
       naming a different event name, even with a valid oracle signature for
       that other event.
-- [ ] Refund after expiry still works unchanged (no oracle involvement) —
+- [x] Refund after expiry still works unchanged (no oracle involvement) —
       a stalled event does not trap funds forever.
-- [ ] Tests cover: correct-oracle release, wrong-signer rejection,
+- [x] Tests cover: correct-oracle release, wrong-signer rejection,
       wrong-event-name rejection, and expiry refund with no event fired.
-- [ ] `npm test` stays green.
+- [x] `npm test` stays green.
 
 ### [ ] 1.3 Batch (T7): several legs, atomic
 
@@ -111,17 +111,17 @@ mechanism with no new rollback logic, the same way DvP's two legs already do.
 executor.
 
 **Acceptance criteria**
-- [ ] A batch of 2–5 legs (mixing Transfer, Payment, Escrow lock) where every
+- [x] A batch of 2–5 legs (mixing Transfer, Payment, Escrow lock) where every
       leg is individually valid settles all of them in one instruction, and
       the block's events list carries every leg's own events.
-- [ ] A batch where the *last* leg is invalid (e.g. insufficient funds)
+- [x] A batch where the *last* leg is invalid (e.g. insufficient funds)
       leaves state byte-identical to before the batch — including the legs
       that would otherwise have individually succeeded. A test asserts this
       by snapshotting `stateRoot()` before and after the rejected batch.
-- [ ] Nesting a `BATCH` leg inside a `BATCH` is rejected explicitly
+- [x] Nesting a `BATCH` leg inside a `BATCH` is rejected explicitly
       (`BATCH_NO_NESTING`), not silently accepted or infinitely recursed.
-- [ ] An empty legs array is rejected (`BATCH_EMPTY`).
-- [ ] `npm test` stays green.
+- [x] An empty legs array is rejected (`BATCH_EMPTY`).
+- [x] `npm test` stays green.
 
 ### [ ] 1.4 Standing/Sweep (T6): a registered rule that fires deterministically
 
@@ -138,22 +138,22 @@ signature question arises. `tx_CANCEL_SWEEP` deregisters one.
 existing `#endOfBlock` hook.
 
 **Acceptance criteria**
-- [ ] Registering a sweep from A to B with `keepAmount = $X`, then crediting A
+- [x] Registering a sweep from A to B with `keepAmount = $X`, then crediting A
       above `$X` (e.g. via a same-block mint or transfer in), causes the
       excess to move to B by the *next* block's end, with no separate
       instruction submitted by anyone.
-- [ ] A sweep never fires while the source balance is at or below
+- [x] A sweep never fires while the source balance is at or below
       `keepAmount`.
-- [ ] `tx_CANCEL_SWEEP` stops future firings; a cancelled sweep firing again
+- [x] `tx_CANCEL_SWEEP` stops future firings; a cancelled sweep firing again
       is a test failure.
-- [ ] Two sweeps in the same block that would otherwise interact (A→B and
+- [x] Two sweeps in the same block that would otherwise interact (A→B and
       B→C) both apply deterministically in a single documented order
       (registration order) — a test pins the exact resulting balances so the
       order is a tested contract, not an accident.
-- [ ] Sweeps are captured in `store.js` recovery (a restart replays them
+- [x] Sweeps are captured in `store.js` recovery (a restart replays them
       identically) — reuses the existing block-log replay, but a test
       confirms it explicitly for this new state.
-- [ ] `npm test` stays green.
+- [x] `npm test` stays green.
 
 ## Priority 2 — keep the honesty file honest
 
@@ -260,6 +260,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 *(One line per completed item, newest last.)*
 
+- 2026-09-27 — 1.1 Escrow (lock/release/refund) and 1.2 PayOnEvent (event-gated release) implemented together in `kernel.js` (four new tx_ handlers, `escrows` state added to `stateView()`), `network.js` (named event-oracle keys in genesis and the dev keystore, serialized for recovery), and `test/escrow.test.js` (7 new tests, written before the code and confirmed red first). One real design bug found while writing tests, not just a test bug: ESCROW_RELEASE defaulted its release role to the payer even for event-gated escrows, which would have let a payer release their own PayOnEvent escrow unconditionally — fixed by requiring EVENT_RELEASE for any escrow with an eventName (`USE_EVENT_RELEASE`). Full suite: 41/41 passing (34 original + 7 new).
 - 2026-09-27 — Roadmap created from a fresh read of `poc/src/*.js`,
   `poc/docs/invariant-charter.md`, `poc/README.md`, and
   `02-technical-implementation.md` §2.5; all 34 existing tests confirmed
