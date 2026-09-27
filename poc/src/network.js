@@ -193,6 +193,7 @@ export class Network {
       quorum: QUORUM,
       results: res.results.map((r) => ({ instId: r.instId, type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events })),
       violations: res.violations,
+      sweepFires: res.sweepFires,
     };
     block.receiptOk = Network.verifyReceipt(this.genesis, block);
     return block;

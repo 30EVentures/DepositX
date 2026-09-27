@@ -584,6 +584,34 @@ export class Ledger {
     events.push({ type: 'BATCH_SETTLED', legs: p.legs.length });
   }
 
+  // Standing/Sweep (T6): a same-issuer standing rule, registered once, that fires
+  // deterministically at #endOfBlock - the same every-validator-agrees hook the graded halt
+  // already runs from, so no separate submitted instruction is needed for it to take effect,
+  // and it replays identically from the block log. Restricted to same-issuer so no settlement
+  // position or cross-issuer accept signature is ever in question.
+  tx_REGISTER_SWEEP(tx, time, j, events) {
+    const p = tx.payload;
+    const from = this.#account(p.from);
+    const to = this.#account(p.to);
+    need(from.issuer === to.issuer, 'SWEEP_SAME_ISSUER_ONLY');
+    need(from.id !== to.id, 'SELF_TRANSFER');
+    this.#sig(tx, `ops:${from.issuer}`);
+    need(typeof p.sweepId === 'string' && ID_RE.test(p.sweepId), 'BAD_SWEEP_ID');
+    need(!this.s.sweeps.has(p.sweepId), 'SWEEP_EXISTS');
+    const keep = parseNonNegAmount(p.keepAmount);
+    j.set(this.s.sweeps, p.sweepId, { from: from.id, to: to.id, keep });
+    events.push({ type: 'SWEEP_REGISTERED', sweepId: p.sweepId, from: from.id, to: to.id, keep: keep.toString() });
+  }
+  tx_CANCEL_SWEEP(tx, time, j, events) {
+    const p = tx.payload;
+    const rec = this.s.sweeps.get(p.sweepId);
+    need(rec, 'UNKNOWN_SWEEP');
+    const from = this.#account(rec.from);
+    this.#sig(tx, `ops:${from.issuer}`);
+    j.del(this.s.sweeps, p.sweepId);
+    events.push({ type: 'SWEEP_CANCELLED', sweepId: p.sweepId });
+  }
+
   // Liquidity-saving netting. Queued payments have debited nothing. A deterministic gridlock
   // resolution finds a maximal subset whose net effect fits every settlement position, then
   // settles that subset atomically. Unsettled instructions stay queued until they expire.
@@ -750,7 +778,25 @@ export class Ledger {
     return { per, anchor: { A: this.s.anchor.A, F: this.s.anchor.F, spSum, ok: anchorOk }, p5: { ok: !negBal, account: negBal }, violations };
   }
 
+  // Sweeps run BEFORE the invariant check: a firing is a plain same-issuer balance move (the
+  // same shape #moveCash's same-issuer branch already produces), so it cannot itself create a
+  // violation, and running it first means a sweep that clears an account back under its keep
+  // is reflected in the same snapshot the invariant check and the dashboard both see.
+  #runSweeps(time) {
+    this.lastSweepFires = [];
+    for (const [sweepId, sw] of this.s.sweeps) {
+      const from = this.s.accounts.get(sw.from);
+      const to = this.s.accounts.get(sw.to);
+      if (!from || !to || from.balance <= sw.keep) continue;
+      const excess = from.balance - sw.keep;
+      from.balance -= excess;
+      to.balance += excess;
+      this.lastSweepFires.push({ sweepId, from: from.id, to: to.id, amount: excess.toString() });
+    }
+  }
+
   #endOfBlock(time) {
+    this.#runSweeps(time);
     const { violations } = this.checkInvariants(time);
     this.lastViolations = violations;
     for (const v of violations) {
@@ -786,7 +832,7 @@ export class Ledger {
     };
     const hash = sha256(canon(header));
     this.s.prev = hash;
-    return { header, hash, results, violations: this.lastViolations };
+    return { header, hash, results, violations: this.lastViolations, sweepFires: this.lastSweepFires };
   }
 
   // ---------------------------------------------------------------- views
