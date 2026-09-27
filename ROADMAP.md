@@ -202,7 +202,7 @@ new surface a planted bug could hide in.
 
 ## Priority 3 — reachability and documentation
 
-### [ ] 3.1 Wire the new instruction kinds into the dashboard's action API
+### [x] 3.1 Wire the new instruction kinds into the dashboard's action API
 
 `poc/src/server.js`'s `act()` switch and `public/index.html`'s action list are
 the only way a person (not a test) can drive the kernel today. Without this,
@@ -212,16 +212,16 @@ stated purpose ("a live dashboard").
 **Depends on:** 1.1–1.4.
 
 **Acceptance criteria**
-- [ ] `act()` gains cases for escrow lock/release/refund, event-release, batch
+- [x] `act()` gains cases for escrow lock/release/refund, event-release, batch
       (a small fixed 2-leg demo, not a general batch builder — matching the
       dashboard's existing level of polish for `dvp`), sweep register/cancel.
-- [ ] The dashboard's action list renders working controls for each new case
+- [x] The dashboard's action list renders working controls for each new case
       using the existing form/element helpers already in `index.html` — same
       visual style, no new dependency.
-- [ ] Manually exercised once via `npm start` and the local dashboard (record
+- [x] Manually exercised once via `npm start` and the local dashboard (record
       the result in the session log below; this is a judgment call an
       automated test can't fully replace for a UI).
-- [ ] `npm test` stays green (server.js has no existing test harness; adding
+- [x] `npm test` stays green (server.js has no existing test harness; adding
       one is out of scope here — see Blocked/needs input if it seems large
       enough to warrant its own item).
 
@@ -260,6 +260,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 *(One line per completed item, newest last.)*
 
+- 2026-09-27 — 3.1: wired all four new templates into `server.js`'s `act()` (escrowLock/escrowRelease/eventRelease/escrowRefund, registerSweep/cancelSweep, batchDemo + batchEmpty/batchNested guard-rail demos) and added matching dashboard sections 8-10 to `public/index.html`, in the existing visual style. Server-side wiring functionally tested via direct HTTP calls for all 11 new action kinds on a locally-run server (port 8799, not the one already running on 8787 for someone else - left untouched). One own mistake caught immediately, not a code bug: registering a sweep with `keepAmount:"0"` from an account that already held a balance swept its *entire* balance right away - correct, designed behaviour, not a bug; just not the demo scenario I meant to run next. Opened the real rendered page in the browser: all three new sections render correctly (copy, controls, styling matching the existing sections exactly), and a live click-through of Escrow Lock then Release worked end to end through the actual UI (blocks #53 ESCROW_LOCK, #56 ESCROW_RELEASED), not just curl. Full suite still 60/60 (server.js has no automated tests; this is the manual check the roadmap itself called for).
 - 2026-09-27 — 3.2: `poc/README.md`'s "What it demonstrates" table gained rows for Escrow, PayOnEvent, Batch and Sweep (each naming its code and test), the model-check row updated with the real 37-action/depth-5-and-6 numbers, and "What it is NOT" re-checked line by line (added the sweep-safety-property limitation, updated the account count; everything else there is still correctly true - real consensus, ZK, HSMs and a Rust port remain out of scope). Root `README.md`'s PoC description and test count updated too. Test-count and timing lines that were stale (34 tests, depth-8 ~6 min) are now accurate (60 tests ~45s, depth-6 ~100s). No functional code changed; no test re-run needed.
 - 2026-09-27 — Priority 2 (keep the honesty file honest). Added Network convenience wrappers for all four new templates first (`escrowLock`/`escrowRelease`/`eventRelease`/`escrowRefund`, `registerSweep`/`cancelSweep`, `batch()`), reused by both the model checker and (later) the dashboard. Extended `modelcheck.js`'s action alphabet 27 -> 37 and added a second same-issuer account, without touching the existing accounts' combinatorics. Added 3 planted-bug mutation tests (roadmap 2.2) for the new templates: an escrow-release-prints-money bug (caught by the existing **P1** invariant, no new checker code), a batch-leg-not-rolled-back bug (caught by the existing **S2** property), and a PayOnEvent wrong-oracle bug (caught by **S3**, after correctly reclassifying that model action from 'legit' to 'attack'). One real false start along the way, found and fixed, not hidden: the first version of the batch mutation test went undetected because the model's batch action used a same-amount mirror pair (pay $1 then pay $1 back), whose second leg is always self-funded by the first leg's own cross-issuer settlement contribution - fixed by using mismatched amounts ($1 then $2), confirmed by hand before changing the code. One honest non-generalizing finding recorded rather than forced: a sweep moving the wrong amount conserves total money and trips no P1-P7 formula, so only `sweep.test.js`'s own targeted tests would catch that class of bug. `poc/docs/invariant-charter.md` updated with real before/after state counts (27 actions/depth 8/40,000 states before; 37 actions/depth 5/3,560 states in the routine test; a one-off depth-6/12,181-state run for a deeper honest data point) and the new limitation. Full suite: 60/60 (was 54), ~44s (was ~16s) - not shrunk to look faster.
 - 2026-09-27 — 1.4 Standing/Sweep (registered same-issuer rule, fires at `#endOfBlock`, the same deterministic hook the graded halt already uses, so no separate submitted instruction is needed and it replays identically from the log). `executeBlock` and `Network#makeBlock` now surface `sweepFires` alongside `violations`. 6 new tests in `test/sweep.test.js`, written first and confirmed red first, including a hand-computed two-sweep cascade (elm/fjord, LKS) pinned to exact resulting balances, and a durable-store recovery test confirming a registered sweep survives a restart and keeps firing. All 6 passed on the first implementation attempt — the cascade math worked out by hand matched the code's actual output exactly. Priority 1 (all four launch-set templates: Escrow, PayOnEvent, Batch, Sweep) is now complete. Full suite: 54/54.

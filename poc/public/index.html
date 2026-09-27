@@ -258,6 +258,34 @@ function renderActions() {
       el('button', { onclick: async () => { const r = await fetch('/api/iso/pacs008', { method: 'POST', body: form.isoXml || '' }); form.isoOut = await r.text(); await refresh(); } }, 'Send pacs.008')),
     form.isoOut ? el('pre', { style: 'margin:8px 0 0;padding:8px;border:1px solid var(--hair);border-radius:6px;overflow:auto;font:12px var(--mono);background:var(--card)' }, form.isoOut) : el('div', { class: 'hint' }, 'The payment UETR becomes the ledger instruction id, so sending the same message twice is refused as a duplicate. Edit the amount or accounts, or break the XML.')));
 
+  root.append(el('fieldset', {}, el('legend', {}, '8 · Escrow (T4) / PayOnEvent (T5)'),
+    el('div', { class: 'row' }, 'id', el('input', { type: 'text', 'aria-label': 'escrow id', value: val('escId', 'e1'), style: 'width:70px', oninput: (e) => (form.escId = e.target.value) }),
+      sel('escFrom', accts, 'MPL:acme'), '→', sel('escTo', accts, 'NSR:cedar'), amt('escAmt', '500'),
+      el('label', { class: 'muted' }, el('input', { type: 'checkbox', checked: !!form.escEvent, onchange: (e) => (form.escEvent = e.target.checked) }), ' event-gated (needs the delivery oracle)')),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => act({ kind: 'escrowLock', escrowId: val('escId', 'e1'), from: val('escFrom', 'MPL:acme'), to: val('escTo', 'NSR:cedar'), amount: val('escAmt', '500'), eventGated: !!form.escEvent }, 'Escrow lock.') }, 'Lock'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'escrowRelease', escrowId: val('escId', 'e1') }, 'Escrow release.') }, 'Release'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'eventRelease', escrowId: val('escId', 'e1') }, "Release on the 'delivery' event.") }, "Release on 'delivery' event"),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'escrowRefund', escrowId: val('escId', 'e1') }, 'Escrow refund.') }, 'Refund (after expiry)')),
+    el('div', { class: 'hint' }, "Locked funds sit in a reserved account at the beneficiary's issuer - not yet the beneficiary's own balance. A plain lock releases with the payer's own key; an event-gated one only releases against the 'delivery' oracle's signature, never the payer's key. Expiry is a fixed 2 minutes for this demo - use \u201cAdvance clock\u201d above to skip past it, then Refund.")));
+
+  root.append(el('fieldset', {}, el('legend', {}, '9 · Standing sweep (T6, same issuer only)'),
+    el('div', { class: 'row' }, 'id', el('input', { type: 'text', 'aria-label': 'sweep id', value: val('swId', 's1'), style: 'width:70px', oninput: (e) => (form.swId = e.target.value) }),
+      sel('swFrom', accts, 'MPL:acme'), '→', sel('swTo', accts, 'MPL:harbour'), 'keep', amt('swKeep', '400000')),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => act({ kind: 'registerSweep', sweepId: val('swId', 's1'), from: val('swFrom', 'MPL:acme'), to: val('swTo', 'MPL:harbour'), keepAmount: val('swKeep', '400000') }, 'Sweep registered.') }, 'Register'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'cancelSweep', sweepId: val('swId', 's1') }, 'Sweep cancelled.') }, 'Cancel')),
+    el('div', { class: 'hint' }, 'Fires automatically at the end of every block once the source rises above "keep" - no separate instruction needed. Register, then Mint into the same account: watch the excess move by itself.')));
+
+  root.append(el('fieldset', {}, el('legend', {}, '10 · Batch (T7): several legs, atomic'),
+    el('div', { class: 'row' }, sel('bFrom1', accts, 'MPL:acme'), '→', sel('bTo1', accts, 'NSR:cedar'), amt('bAmt1', '100')),
+    el('div', { class: 'row' }, sel('bFrom2', accts, 'NSR:cedar'), '→', sel('bTo2', accts, 'MPL:acme'), amt('bAmt2', '200')),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => act({ kind: 'batchDemo', from1: val('bFrom1', 'MPL:acme'), to1: val('bTo1', 'NSR:cedar'), amount1: val('bAmt1', '100'), from2: val('bFrom2', 'NSR:cedar'), to2: val('bTo2', 'MPL:acme'), amount2: val('bAmt2', '200') }, 'Batch.') }, 'Run both legs atomically'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'batchEmpty' }, 'Empty batch.') }, 'Try an empty batch'),
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'batchNested', from1: val('bFrom1', 'MPL:acme'), to1: val('bTo1', 'NSR:cedar'), amount1: val('bAmt1', '100') }, 'Nested batch.') }, 'Try a batch inside a batch')),
+    el('div', { class: 'hint' }, 'Both legs settle in one block or neither does - one shared rollback, the same mechanism DvP already uses. Drain the second leg\u2019s issuer position first (section 4) and the whole batch is refused with nothing moved, including the first leg.')));
+
   root.append(el('fieldset', {}, el('legend', {}, '7 · Recover'),
     el('div', { class: 'row' },
       el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'repair' }, 'Patch.') }, 'Patch the ledger defect'),

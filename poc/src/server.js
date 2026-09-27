@@ -35,6 +35,21 @@ const issuerId = (v) => {
   if (!['MPL', 'NSR', 'LKS'].includes(v)) throw new Error('bad issuer');
   return v;
 };
+const id = (v, field = 'id') => {
+  if (typeof v !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(v)) throw new Error(`bad ${field}`);
+  return v;
+};
+
+// Same decision Network#pay() makes internally: same issuer -> TRANSFER, otherwise PAYMENT with
+// the payee issuer's accept signature. Used by the batch demo, which builds its own legs rather
+// than going through pay(), so both legs need the right shape regardless of which pair is picked.
+function payLeg(net, from, to, amt) {
+  const [a] = from.split(':');
+  const [b] = to.split(':');
+  return a === b
+    ? net.tx('TRANSFER', { from, to, amount: amt.toString() }, [`ops:${a}`, `screen:${a}`])
+    : net.tx('PAYMENT', { from, to, amount: amt.toString(), queueIfShort: false }, [`ops:${a}`, `screen:${a}`, `accept:${b}`]);
+}
 
 function act(b) {
   switch (b.kind) {
@@ -49,6 +64,19 @@ function act(b) {
     case 'chaos': return net.chaos(String(b.type), b.issuer ? { issuer: issuerId(b.issuer) } : {});
     case 'advance': return net.advance(Math.max(1, Math.min(7200, Number(b.seconds) | 0)));
     case 'corePause': return net.setCorePaused(!!b.on);
+    // Escrow (T4) / PayOnEvent (T5): a fixed, short expiry (2 min) keeps the demo simple - no
+    // extra input field for it. eventGated wires the lock to the 'delivery' oracle.
+    case 'escrowLock': return net.escrowLock(acct(b.from), acct(b.to), id(b.escrowId, 'escrowId'), cents(b.amount), { expiresAt: net.now() + 120, eventName: b.eventGated ? 'delivery' : undefined });
+    case 'escrowRelease': return net.escrowRelease(id(b.escrowId, 'escrowId'));
+    case 'eventRelease': return net.eventRelease(id(b.escrowId, 'escrowId'), 'delivery');
+    case 'escrowRefund': return net.escrowRefund(id(b.escrowId, 'escrowId'));
+    // Standing/Sweep (T6): same-issuer only - the kernel itself refuses a cross-issuer attempt.
+    case 'registerSweep': return net.registerSweep(id(b.sweepId, 'sweepId'), acct(b.from), acct(b.to), cents(b.keepAmount));
+    case 'cancelSweep': return net.cancelSweep(id(b.sweepId, 'sweepId'));
+    // Batch (T7): a small fixed 2-leg demo, not a general batch builder (roadmap 3.1's own scope).
+    case 'batchDemo': return net.batch([payLeg(net, acct(b.from1), acct(b.to1), cents(b.amount1)), payLeg(net, acct(b.from2), acct(b.to2), cents(b.amount2))]);
+    case 'batchEmpty': return net.batch([]);
+    case 'batchNested': return net.batch([net.tx('BATCH', { legs: [payLeg(net, acct(b.from1), acct(b.to1), cents(b.amount1))] }, [])]);
     case 'reset': net.listeners.clear(); net.store?.close(); net = new Network({ dataDir: DATA, fresh: true }); watch(); push(); return { ok: true, message: 'network reset to genesis' };
     default: return { ok: false, error: 'UNKNOWN_ACTION' };
   }
