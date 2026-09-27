@@ -92,3 +92,14 @@ test('batch: a malformed leg is rejected with the same code a standalone malform
   const batched = n.submit([n.tx('BATCH', { legs: [leg] }, [])]);
   assert.equal(batched.results[0].error, standalone.results[0].error);
 });
+
+test('Network wrapper: batch() matches the raw tx()+submit() path', () => {
+  const n = new Network();
+  const leg1 = n.tx('TRANSFER', { from: 'LKS:elm', to: 'LKS:fjord', amount: dollars(10).toString() }, ['ops:LKS', 'screen:LKS']);
+  const leg2 = n.tx('TRANSFER', { from: 'LKS:fjord', to: 'LKS:elm', amount: dollars(5).toString() }, ['ops:LKS', 'screen:LKS']);
+  const before = bal(n, 'LKS:elm');
+  const r = n.batch([leg1, leg2]);
+  assert.ok(r.ok, r.message);
+  assert.equal(bal(n, 'LKS:elm'), before - dollars(10) + dollars(5));
+  allOk(n);
+});

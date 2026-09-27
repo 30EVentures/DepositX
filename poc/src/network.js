@@ -363,6 +363,62 @@ export class Network {
     return this.#res(block, { stage: 'dvp' });
   }
 
+  // Escrow (T4) / PayOnEvent (T5). Convenience wrappers over the raw tx()/submit() pair every
+  // other action already uses; the caller does not need to know which key a release requires -
+  // it is looked up from the escrow record itself, exactly as a real client would read it back
+  // from state rather than remembering it.
+  escrowLock(from, to, escrowId, amt, { expiresAt, releaseRole, eventName } = {}) {
+    const [a] = from.split(':');
+    const [b] = to.split(':');
+    const roles = a === b ? [`ops:${a}`, `screen:${a}`] : [`ops:${a}`, `screen:${a}`, `accept:${b}`];
+    const exp = expiresAt || this.now() + 3600;
+    const block = this.submit([this.tx('ESCROW_LOCK', { escrowId, from, to, amount: amt.toString(), expiresAt: exp, releaseRole, eventName }, roles)]);
+    this.pumpCore();
+    return this.#res(block, { stage: 'escrow-lock' });
+  }
+  escrowRelease(escrowId) {
+    const rec = this.ledger.s.escrows.get(escrowId);
+    if (!rec) return { ok: false, error: 'UNKNOWN_ESCROW', message: 'no such escrow', stage: 'escrow-release' };
+    const block = this.submit([this.tx('ESCROW_RELEASE', { escrowId }, [rec.releaseRole])]);
+    this.pumpCore();
+    return this.#res(block, { stage: 'escrow-release' });
+  }
+  eventRelease(escrowId, event) {
+    const block = this.submit([this.tx('EVENT_RELEASE', { escrowId, event }, [`event:${event}`])]);
+    this.pumpCore();
+    return this.#res(block, { stage: 'event-release' });
+  }
+  escrowRefund(escrowId) {
+    const rec = this.ledger.s.escrows.get(escrowId);
+    if (!rec) return { ok: false, error: 'UNKNOWN_ESCROW', message: 'no such escrow', stage: 'escrow-refund' };
+    const from = this.ledger.s.accounts.get(rec.from);
+    const block = this.submit([this.tx('ESCROW_REFUND', { escrowId }, [`ops:${from.issuer}`])]);
+    this.pumpCore();
+    return this.#res(block, { stage: 'escrow-refund' });
+  }
+
+  // Standing/Sweep (T6). Same-issuer only; see kernel.js.
+  registerSweep(sweepId, from, to, keepAmount) {
+    const [a] = from.split(':');
+    const block = this.submit([this.tx('REGISTER_SWEEP', { sweepId, from, to, keepAmount: keepAmount.toString() }, [`ops:${a}`])]);
+    return this.#res(block, { stage: 'register-sweep' });
+  }
+  cancelSweep(sweepId) {
+    const rec = this.ledger.s.sweeps.get(sweepId);
+    if (!rec) return { ok: false, error: 'UNKNOWN_SWEEP', message: 'no such sweep', stage: 'cancel-sweep' };
+    const from = this.ledger.s.accounts.get(rec.from);
+    const block = this.submit([this.tx('CANCEL_SWEEP', { sweepId }, [`ops:${from.issuer}`])]);
+    return this.#res(block, { stage: 'cancel-sweep' });
+  }
+
+  // Batch (T7). legTxs: an array of already-built, already-signed tx() objects (each leg needs
+  // its own signatures, exactly as if submitted alone - see kernel.js's tx_BATCH).
+  batch(legTxs) {
+    const block = this.submit([this.tx('BATCH', { legs: legTxs }, [])]);
+    this.pumpCore();
+    return this.#res(block, { stage: 'batch' });
+  }
+
   fund(issuer, amt) {
     const bank = this.banks[issuer];
     if (bank.cbBalance < amt) return { ok: false, stage: 'central-bank', error: 'CB_INSUFFICIENT_FUNDS', message: 'not enough central-bank funds to prefund the position' };

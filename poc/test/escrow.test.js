@@ -150,3 +150,23 @@ test('PayOnEvent: locking against an unregistered event name is rejected up fron
   const r = n.submit([lockTx(n, { escrowId: 'poe3', from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(100), expiresAt: n.now() + 60, eventName: 'no-such-event' })]);
   assert.equal(r.results[0].error, 'UNKNOWN_EVENT');
 });
+
+test('Network wrappers: escrowLock/escrowRelease/eventRelease/escrowRefund match the raw tx()+submit() path', () => {
+  const n = new Network();
+  const lock = n.escrowLock('MPL:acme', 'NSR:cedar', 'w1', dollars(400), { eventName: 'delivery' });
+  assert.ok(lock.ok, lock.message);
+  assert.ok(n.ledger.s.escrows.has('w1'));
+  assert.equal(n.eventRelease('w1', 'inspection').error, 'EVENT_MISMATCH');
+  const before = bal(n, 'NSR:cedar');
+  assert.ok(n.eventRelease('w1', 'delivery').ok);
+  assert.equal(bal(n, 'NSR:cedar'), before + dollars(400));
+
+  const lock2 = n.escrowLock('MPL:acme', 'MPL:harbour', 'w2', dollars(50), { expiresAt: n.now() + 60 });
+  assert.ok(lock2.ok, lock2.message);
+  assert.equal(n.escrowRefund('w2').error, 'ESCROW_NOT_EXPIRED');
+  const before2 = bal(n, 'MPL:acme');
+  assert.ok(n.escrowRelease('w2').ok);
+  assert.equal(n.escrowRelease('w2').error, 'UNKNOWN_ESCROW');
+  void before2;
+  allOk(n);
+});

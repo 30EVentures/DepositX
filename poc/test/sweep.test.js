@@ -99,3 +99,14 @@ test('sweep: state is captured in the durable store and a restart replays the sa
   allOk(b);
   b.store.close();
 });
+
+test('Network wrappers: registerSweep/cancelSweep match the raw tx()+submit() path', () => {
+  const n = new Network();
+  const reg = n.registerSweep('sw-w1', 'MPL:acme', 'MPL:harbour', dollars(400_000));
+  assert.ok(reg.ok, reg.message);
+  assert.equal(bal(n, 'MPL:acme'), dollars(400_000));
+  assert.ok(n.cancelSweep('sw-w1').ok);
+  assert.equal(n.cancelSweep('sw-w1').error, 'UNKNOWN_SWEEP');
+  n.mint('MPL', 'acme', dollars(50_000));
+  assert.equal(bal(n, 'MPL:acme'), dollars(450_000), 'cancelled: no sweep fires');
+});
