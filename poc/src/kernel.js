@@ -566,6 +566,24 @@ export class Ledger {
     events.push({ type: 'ESCROW_REFUNDED', escrowId: p.escrowId, from: from.id, amount: rec.amount.toString() });
   }
 
+  // Batch (T7): several legs, atomic. Each leg is a fully independent, fully signed instruction
+  // (same shape as a top-level tx), dispatched to its own existing handler against THIS SAME
+  // journal - so #execTx's own catch block, which already rolls back the whole journal on any
+  // KernelError, gives "all legs or none" for free, the same way DvP's two legs already get it.
+  // #checkEnvelope gives every leg its own inst_id/dedup/validity checks, so a leg cannot be
+  // replayed just because it rode inside a fresh outer batch.
+  tx_BATCH(tx, time, j, events) {
+    const p = tx.payload;
+    need(Array.isArray(p.legs) && p.legs.length > 0, 'BATCH_EMPTY');
+    for (const leg of p.legs) {
+      const h = this.#checkEnvelope(leg, time);
+      need(leg.type !== 'BATCH', 'BATCH_NO_NESTING');
+      h.call(this, leg, time, j, events);
+      j.set(this.s.dedup, leg.inst_id, time);
+    }
+    events.push({ type: 'BATCH_SETTLED', legs: p.legs.length });
+  }
+
   // Liquidity-saving netting. Queued payments have debited nothing. A deterministic gridlock
   // resolution finds a maximal subset whose net effect fits every settlement position, then
   // settles that subset atomically. Unsettled instructions stay queued until they expire.
