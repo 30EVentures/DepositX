@@ -89,6 +89,14 @@ footer { margin-top: 18px; color: var(--slate); font-size: 12.5px; }
     <div class="spacer"></div>
     <span id="statusPill" class="pill ok">LIVE</span>
     <span class="mono muted" id="hdrMeta"></span>
+    <label class="muted" style="font-size:12px">Viewing as
+      <select id="viewAsSel" aria-label="confidentiality view" style="margin-left:4px">
+        <option value="supervisor">Supervisor (full)</option>
+        <option value="MPL">Maple Bank</option>
+        <option value="NSR">North Star Bank</option>
+        <option value="LKS">Lakeshore Bank</option>
+      </select>
+    </label>
   </header>
 
   <div id="banner"></div>
@@ -124,6 +132,7 @@ const el = (tag, attrs = {}, ...kids) => {
 const fmt = (c) => { c = BigInt(c); const neg = c < 0n; if (neg) c = -c; return (neg ? '-' : '') + '$' + (c / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + (c % 100n).toString().padStart(2, '0'); };
 let S = null;
 let form = {}; // remembered form values across re-renders
+let viewAs = 'supervisor'; // roadmap 4.1: M2 confidentiality demo
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined);
@@ -169,6 +178,16 @@ function renderIssuers() {
   const root = $('#issuers'); root.replaceChildren();
   for (const i of S.issuers) {
     const st = i.status !== 'ACTIVE';
+    // Roadmap 4.1 (M2 confidentiality): a redacted issuer (not the viewer's own,
+    // and the viewer isn't a supervisor) carries only id/name/status/quarantine.
+    if (i.customers === undefined) {
+      root.append(el('div', { class: 'card' + (st ? ' q' : '') },
+        el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:8px' }, el('h2', {}, i.name), el('span', { class: 'tag' + (st ? ' bad' : '') }, i.status === 'ACTIVE' ? 'ACTIVE' : 'QUARANTINED')),
+        el('hr', { class: 'rule' }),
+        i.quarantine ? el('div', { class: 'hint' }, 'Reason: ' + i.quarantine.reason) : null,
+        el('div', { class: 'hint' }, 'Confidential (M2): only status is visible to another issuer - not its book.')));
+      continue;
+    }
     const inflight = BigInt(i.H) + BigInt(i.R) + BigInt(i.In);
     root.append(el('div', { class: 'card' + (st ? ' q' : '') },
       el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;gap:8px' }, el('h2', {}, i.name), el('span', { class: 'tag' + (st ? ' bad' : '') }, i.status === 'ACTIVE' ? 'ACTIVE' : 'QUARANTINED')),
@@ -197,8 +216,9 @@ function amt(name, def) {
 }
 
 function renderActions() {
-  const accts = S.issuers.flatMap((i) => i.customers.map((c) => [`${i.id}:${c.id}`, `${c.name} · ${i.id}`]));
-  const custs = S.issuers.flatMap((i) => i.customers.filter((c) => !c.sanctioned).map((c) => [`${i.id}|${c.id}`, `${c.name} · ${i.id}`]));
+  // Roadmap 4.1: a redacted issuer (M2 confidentiality) has no customers array - skip it here too.
+  const accts = S.issuers.flatMap((i) => (i.customers || []).map((c) => [`${i.id}:${c.id}`, `${c.name} · ${i.id}`]));
+  const custs = S.issuers.flatMap((i) => (i.customers || []).filter((c) => !c.sanctioned).map((c) => [`${i.id}|${c.id}`, `${c.name} · ${i.id}`]));
   const issuers = S.issuers.map((i) => [i.id, i.name]);
   const root = $('#actions'); root.replaceChildren();
   const val = (k, d) => form[k] ?? d;
@@ -323,12 +343,13 @@ function renderBlocks() {
 }
 
 async function refresh() {
-  S = await api('/api/state');
+  S = await api('/api/state' + (viewAs === 'supervisor' ? '' : `?viewAs=${viewAs}`));
   const active = document.activeElement;
   const keep = active && active.getAttribute && active.getAttribute('aria-label');
   renderHeader(); renderIssuers(); renderActions(); renderInvariants(); renderBlocks();
   if (keep) { const e = document.querySelector(`[aria-label="${keep}"]`); if (e && e !== document.activeElement) e.focus(); }
 }
+$('#viewAsSel').addEventListener('change', (e) => { viewAs = e.target.value; refresh(); });
 refresh();
 try { new EventSource('/events').onmessage = () => { if (!document.activeElement || !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) refresh(); }; } catch {}
 setInterval(() => { if (!document.activeElement || !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) refresh(); }, 3000);

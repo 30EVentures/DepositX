@@ -79,6 +79,18 @@ count (3,560) than a shallow run of the old alphabet would; CI time matters more
 old run's depth number exactly. The depth-6 run above is the honest "we went deeper once and
 still found nothing" data point the roadmap asked for - it is not re-run automatically.
 
+## Roadmap 4.1: M2 confidentiality is deliberately not model-checked
+
+`confidentialView` (`src/network.js`) is a pure, read-only transform of `Network#snapshot()`'s
+already-built output. It runs entirely outside the transaction path - it cannot call a `tx_*`
+handler, touch the Journal, or run before or after `#endOfBlock` - so it cannot itself produce a
+state the kernel would not otherwise reach, and cannot cause a P1-P7 violation. Model-checking
+existing actions under different *viewers* would test the same reachable states already covered,
+rendered differently; it would not exercise anything new. What is worth testing, and is
+(`test/confidentiality.test.js`, 6 tests): that a view never mutates the real network or the
+snapshot it was given, that two issuers' views of the identical state genuinely disagree, and that
+a quarantined issuer's status stays visible to a viewer that cannot see its book.
+
 ## What is NOT checked (be honest about the bounds)
 
 - The model checker is **bounded** (state cap and depth cap, small alphabet of $1/$2 amounts,

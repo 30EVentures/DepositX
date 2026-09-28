@@ -31,6 +31,25 @@ const js = (v) => {
   return v;
 };
 
+// M2 confidentiality (roadmap 4.1): a pure view over Network#snapshot()'s
+// already-built output - access control, not cryptography (02-technical-
+// implementation.md T-6/section 2.6). The kernel and the real settled state
+// are never touched; this only changes what a caller is shown. `viewer` is
+// `{ supervisor: true }` (the Bank of Canada observer / operator: everything,
+// unredacted - matches the invariant charter's own "supervisory 60-second
+// claim") or `{ issuer: '<id>' }` (that issuer's own book in full; every
+// other issuer reduced to id/name/status/quarantine - enough to know whether
+// a counterparty is safe to pay, never its book. An id matching no real
+// issuer sees no issuer's book at all, same as an outside party).
+export function confidentialView(snapshot, viewer = {}) {
+  if (viewer.supervisor) return snapshot;
+  const ownId = viewer.issuer;
+  return {
+    ...snapshot,
+    issuers: snapshot.issuers.map((i) => (i.id === ownId ? i : { id: i.id, name: i.name, status: i.status, quarantine: i.quarantine })),
+  };
+}
+
 export class Network {
   constructor(opts = {}) {
     this.opts = opts;

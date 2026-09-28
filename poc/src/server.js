@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Network } from './network.js';
+import { Network, confidentialView } from './network.js';
 import { bench } from './bench.js';
 import { samplePacs008 } from './iso20022.js';
 
@@ -92,7 +92,14 @@ http
   .createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     try {
-      if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, net.snapshot());
+      if (req.method === 'GET' && url.pathname === '/api/state') {
+        // Roadmap 4.1 (M2 confidentiality): ?viewAs=<issuerId> shows that issuer's
+        // own book only; anything else (including no parameter) is the supervisor's
+        // full, unredacted view - today's default behaviour, unchanged.
+        const viewAs = url.searchParams.get('viewAs');
+        const viewer = viewAs && ['MPL', 'NSR', 'LKS'].includes(viewAs) ? { issuer: viewAs } : { supervisor: true };
+        return json(res, 200, confidentialView(net.snapshot(), viewer));
+      }
       if (req.method === 'GET' && url.pathname === '/api/verify') return json(res, 200, net.verifyReplay());
       if (req.method === 'GET' && url.pathname === '/api/bench') return json(res, 200, bench({ n: 20000 }));
       if (req.method === 'GET' && url.pathname === '/events') {

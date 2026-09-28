@@ -252,7 +252,7 @@ fails" (§2.6 table). M2 is **not cryptographic** — it is an access-control
 question (who is shown what), not a hiding-in-the-math one, so unlike M1 it
 needs no new dependency and no crypto review to prototype at PoC scale.
 
-### [ ] 4.1 A confidentiality view: issuers see their own book, not each other's
+### [x] 4.1 A confidentiality view: issuers see their own book, not each other's
 
 **Design.** A pure function over the existing `snapshot()` output — the
 kernel and its invariants are completely unchanged; this is a rendering
@@ -268,37 +268,37 @@ is treated as an outside party and sees no issuer's book in detail.
 **Depends on:** nothing new; reads `Network#snapshot()`'s existing output.
 
 **Acceptance criteria**
-- [ ] A supervisor view is byte-identical to today's full `snapshot()` — M2
+- [x] A supervisor view is byte-identical to today's full `snapshot()` — M2
       changes what a bank sees, never what the Bank of Canada observer sees.
-- [ ] An issuer view shows full customer detail (names, deposits, token
+- [x] An issuer view shows full customer detail (names, deposits, token
       balances) for its own issuer, and for every other issuer shows only
       `id`, `name`, `status`, `quarantine` — no customers array, no S/L/sp/
       core figures.
-- [ ] Two different issuers' views of the identical underlying state disagree
+- [x] Two different issuers' views of the identical underlying state disagree
       about what is visible (MPL's view hides NSR's book; NSR's view hides
       MPL's) — proving this is genuine per-viewer confidentiality, not a
       global toggle.
-- [ ] A quarantined or halted issuer's status is visible in every view,
+- [x] A quarantined or halted issuer's status is visible in every view,
       including to issuers that cannot see its book — the point made in the
       design note (a payer must be able to route around a bad counterparty
       without seeing its balance sheet).
-- [ ] Building a view never mutates the network: calling it twice, or
+- [x] Building a view never mutates the network: calling it twice, or
       alongside an ordinary full `snapshot()`, produces the same real state
       each time (a test using the same live `Network` instance confirms this,
       not just that the view function is theoretically pure).
-- [ ] `GET /api/state` gains a `?viewAs=<issuerId|supervisor>` parameter
+- [x] `GET /api/state` gains a `?viewAs=<issuerId|supervisor>` parameter
       (default `supervisor`, so today's dashboard behaviour is unchanged
       unless asked for something else) and the dashboard gains a control to
       pick which issuer's seat you are viewing from, labelled honestly as a
       confidentiality demo, not a login.
-- [ ] Not model-checked: M2 is a read-only view transform outside the
+- [x] Not model-checked: M2 is a read-only view transform outside the
       transaction path, so it cannot itself create an invariant violation —
       recorded as the reasoning in `docs/invariant-charter.md`, not silently
       skipped.
-- [ ] `poc/docs/invariant-charter.md` and `poc/README.md`'s "What it is NOT"
+- [x] `poc/docs/invariant-charter.md` and `poc/README.md`'s "What it is NOT"
       both updated: M2 is now built and demoed; M1 (real ZK) and HSMs remain
       correctly out of scope.
-- [ ] `npm test` stays green; new tests in `test/confidentiality.test.js`.
+- [x] `npm test` stays green; new tests in `test/confidentiality.test.js`.
 
 ## Blocked / needs input
 
@@ -327,6 +327,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 - 2026-09-27 — Priority 2 (keep the honesty file honest). Added Network convenience wrappers for all four new templates first (`escrowLock`/`escrowRelease`/`eventRelease`/`escrowRefund`, `registerSweep`/`cancelSweep`, `batch()`), reused by both the model checker and (later) the dashboard. Extended `modelcheck.js`'s action alphabet 27 -> 37 and added a second same-issuer account, without touching the existing accounts' combinatorics. Added 3 planted-bug mutation tests (roadmap 2.2) for the new templates: an escrow-release-prints-money bug (caught by the existing **P1** invariant, no new checker code), a batch-leg-not-rolled-back bug (caught by the existing **S2** property), and a PayOnEvent wrong-oracle bug (caught by **S3**, after correctly reclassifying that model action from 'legit' to 'attack'). One real false start along the way, found and fixed, not hidden: the first version of the batch mutation test went undetected because the model's batch action used a same-amount mirror pair (pay $1 then pay $1 back), whose second leg is always self-funded by the first leg's own cross-issuer settlement contribution - fixed by using mismatched amounts ($1 then $2), confirmed by hand before changing the code. One honest non-generalizing finding recorded rather than forced: a sweep moving the wrong amount conserves total money and trips no P1-P7 formula, so only `sweep.test.js`'s own targeted tests would catch that class of bug. `poc/docs/invariant-charter.md` updated with real before/after state counts (27 actions/depth 8/40,000 states before; 37 actions/depth 5/3,560 states in the routine test; a one-off depth-6/12,181-state run for a deeper honest data point) and the new limitation. Full suite: 60/60 (was 54), ~44s (was ~16s) - not shrunk to look faster.
 - 2026-09-27 — 1.4 Standing/Sweep (registered same-issuer rule, fires at `#endOfBlock`, the same deterministic hook the graded halt already uses, so no separate submitted instruction is needed and it replays identically from the log). `executeBlock` and `Network#makeBlock` now surface `sweepFires` alongside `violations`. 6 new tests in `test/sweep.test.js`, written first and confirmed red first, including a hand-computed two-sweep cascade (elm/fjord, LKS) pinned to exact resulting balances, and a durable-store recovery test confirming a registered sweep survives a restart and keeps firing. All 6 passed on the first implementation attempt — the cascade math worked out by hand matched the code's actual output exactly. Priority 1 (all four launch-set templates: Escrow, PayOnEvent, Batch, Sweep) is now complete. Full suite: 54/54.
 - 2026-09-27 — 1.3 Batch (all-or-nothing legs) implemented: `#execTx`'s generic checks were already extracted into `#checkEnvelope` in the previous pass specifically for this, so `tx_BATCH` dispatches each leg to its own existing handler against the same top-level Journal and gets atomicity for free from `#execTx`'s existing rollback-on-error. 7 tests in `test/batch.test.js`, written first (red first: all 7 failed against the unmodified kernel). Two of my own test assumptions were wrong once the implementation existed — an escrow id with capital letters, and an expected same-issuer leg emitting cross-issuer CONVERT events it shouldn't — both fixed in the test, not the kernel; every atomicity, replay-protection and nesting-guard assertion passed on the first implementation attempt. Full suite: 48/48.
+- 2026-09-28 — Priority 4.1: M2 confidentiality (issuer-domain need-to-know), continuing the roadmap at Caleb's request after it had reached 48/48. Grounded in 02-technical-implementation.md T-6, which says M2 needs no cryptography, unlike M1 (ZK, still correctly out of scope) - it is access control, so it was buildable at PoC scale with no new dependency. `confidentialView(snapshot, viewer)` in `network.js`: a pure transform, not a kernel change - an issuer sees its own book in full and every other issuer's id/name/status/quarantine only (status stays visible so a payer can still avoid a quarantined counterparty without seeing its balance sheet); the supervisor view is byte-identical to today's full snapshot. Wired into `GET /api/state?viewAs=<id>` and a new "Viewing as" selector in the dashboard header. 6 new tests in `test/confidentiality.test.js`, written first and confirmed red (the import itself failed, since the function didn't exist), all 6 passing on the first implementation attempt. Two things found and fixed while wiring the dashboard, not in the design: `renderIssuers()` and the action dropdowns both assumed every issuer always has a `customers` array and would have thrown on a redacted one; and an initial `onchange="..."` inline handler didn't match this file's style (everywhere else uses `addEventListener`) - replaced. Confirmed live in the browser, not just by curl: switching to "Maple Bank" correctly showed its own full book while North Star and Lakeshore collapsed to "Confidential (M2): only status is visible to another issuer - not its book," and the payment dropdowns correctly stopped offering accounts at issuers whose book isn't visible (a disclosed, honest side effect, not a bug). Deliberately not model-checked - reasoning recorded in `docs/invariant-charter.md`: a read-only view outside the transaction path cannot itself produce a new reachable state or a P1-P7 violation. `poc/README.md`'s demonstrates table and "What it is NOT" both updated. Full suite: 66/66 (was 60).
 - 2026-09-27 — 1.1 Escrow (lock/release/refund) and 1.2 PayOnEvent (event-gated release) implemented together in `kernel.js` (four new tx_ handlers, `escrows` state added to `stateView()`), `network.js` (named event-oracle keys in genesis and the dev keystore, serialized for recovery), and `test/escrow.test.js` (7 new tests, written before the code and confirmed red first). One real design bug found while writing tests, not just a test bug: ESCROW_RELEASE defaulted its release role to the payer even for event-gated escrows, which would have let a payer release their own PayOnEvent escrow unconditionally — fixed by requiring EVENT_RELEASE for any escrow with an eventName (`USE_EVENT_RELEASE`). Full suite: 41/41 passing (34 original + 7 new).
 - 2026-09-27 — Roadmap created from a fresh read of `poc/src/*.js`,
   `poc/docs/invariant-charter.md`, `poc/README.md`, and
