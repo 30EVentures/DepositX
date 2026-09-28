@@ -53,6 +53,7 @@ td.r, th.r { text-align: right; font-family: var(--mono); font-size: 12.5px; pad
 .tag { font: 500 11px var(--mono); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--hair); color: var(--slate); }
 .tag.bad { color: var(--bad); border-color: var(--bad); }
 .actions { display: grid; gap: 12px; }
+.tabbar { display: flex; gap: 6px; flex-wrap: wrap; }
 fieldset { border: 1px solid var(--hair); border-radius: 8px; padding: 10px 12px 12px; margin: 0; }
 legend { font: 600 13px var(--body); padding: 0 6px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
@@ -104,7 +105,10 @@ footer { margin-top: 18px; color: var(--slate); font-size: 12.5px; }
   <div class="grid3" id="issuers"></div>
 
   <div class="main">
-    <div class="actions" id="actions"></div>
+    <div>
+      <div class="tabbar" id="tabbar" role="tablist" aria-label="Action categories"></div>
+      <div class="actions" id="actions" style="margin-top:10px"></div>
+    </div>
     <div>
       <div class="card"><h2>Par invariants</h2><hr class="rule"><div id="invs"></div></div>
       <div class="card" style="margin-top:14px"><h2>Blocks</h2><hr class="rule"><div class="blocks" id="blocks"></div></div>
@@ -133,6 +137,7 @@ const fmt = (c) => { c = BigInt(c); const neg = c < 0n; if (neg) c = -c; return 
 let S = null;
 let form = {}; // remembered form values across re-renders
 let viewAs = 'supervisor'; // roadmap 4.1: M2 confidentiality demo
+let tab = 'everyday'; // which action tab is showing
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined);
@@ -215,7 +220,21 @@ function amt(name, def) {
   return el('input', { type: 'text', inputmode: 'decimal', 'aria-label': name, value: form[name] ?? def, oninput: (e) => (form[name] = e.target.value) });
 }
 
+const TABS = [
+  ['everyday', 'Everyday banking'],
+  ['advanced', 'Advanced features'],
+  ['messaging', 'Bank messaging'],
+  ['break', 'Break it & recover'],
+];
+function renderTabs() {
+  const root = $('#tabbar'); root.replaceChildren();
+  for (const [key, label] of TABS) {
+    root.append(el('button', { class: tab === key ? '' : 'ghost', role: 'tab', 'aria-selected': tab === key, onclick: () => { tab = key; renderActions(); } }, label));
+  }
+}
+
 function renderActions() {
+  renderTabs();
   // Roadmap 4.1: a redacted issuer (M2 confidentiality) has no customers array - skip it here too.
   const accts = S.issuers.flatMap((i) => (i.customers || []).map((c) => [`${i.id}:${c.id}`, `${c.name} · ${i.id}`]));
   const custs = S.issuers.flatMap((i) => (i.customers || []).filter((c) => !c.sanctioned).map((c) => [`${i.id}|${c.id}`, `${c.name} · ${i.id}`]));
@@ -223,38 +242,38 @@ function renderActions() {
   const root = $('#actions'); root.replaceChildren();
   const val = (k, d) => form[k] ?? d;
 
-  root.append(el('fieldset', {}, el('legend', {}, '1 · Pay across banks (atomic, at par)'),
+  const payFieldset = el('fieldset', {}, el('legend', {}, 'Pay across banks (atomic, at par)'),
     el('div', { class: 'row' }, sel('payFrom', accts, 'MPL:acme'), '→', sel('payTo', accts, 'NSR:cedar'), amt('payAmt', '25000'),
       el('label', { class: 'muted' }, el('input', { type: 'checkbox', checked: !!form.payQueue, onchange: (e) => (form.payQueue = e.target.checked) }), ' queue if short')),
     el('div', { class: 'row' },
       el('button', { onclick: () => act({ kind: 'pay', from: val('payFrom', 'MPL:acme'), to: val('payTo', 'NSR:cedar'), amount: val('payAmt', '25000'), queue: !!form.payQueue }, 'Payment.') }, 'Pay'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'net' }, 'Netting cycle.') }, `Run netting cycle${S.queue.length ? ` (${S.queue.length} queued)` : ''}`)),
     el('div', { class: 'hint' }, 'Debit at one bank, credit at the other, settlement positions move 1:1, or nothing happens. Try paying Shadow Trading (sanctioned).'),
-    S.queue.length ? el('div', { class: 'hint' }, 'Queued (nothing debited yet): ' + S.queue.map((q) => `${q.from}→${q.to} ${fmt(q.amount)}`).join(' · ')) : null));
+    S.queue.length ? el('div', { class: 'hint' }, 'Queued (nothing debited yet): ' + S.queue.map((q) => `${q.from}→${q.to} ${fmt(q.amount)}`).join(' · ')) : null);
 
-  root.append(el('fieldset', {}, el('legend', {}, '2 · Deposit ⇄ token (mint / redeem)'),
+  const mintFieldset = el('fieldset', {}, el('legend', {}, 'Deposit ⇄ token (mint / redeem)'),
     el('div', { class: 'row' }, sel('mintWho', custs, 'MPL|acme'), amt('mintAmt', '50000')),
     el('div', { class: 'row' },
       el('button', { onclick: () => { const [i, c] = val('mintWho', 'MPL|acme').split('|'); act({ kind: 'mint', issuer: i, customer: c, amount: val('mintAmt', '50000') }, 'Mint.'); } }, 'Mint from deposit'),
       el('button', { class: 'ghost', onclick: () => { const [i, c] = val('mintWho', 'MPL|acme').split('|'); act({ kind: 'redeem', issuer: i, customer: c, amount: val('mintAmt', '50000') }, 'Redeem.'); } }, 'Redeem to deposit')),
-    el('div', { class: 'hint' }, 'Mint: the bank’s core holds the deposit first, the ledger mints second, so supply never exceeds backing. Redeem is the reverse.')));
+    el('div', { class: 'hint' }, "Mint: the bank's core holds the deposit first, the ledger mints second, so supply never exceeds backing. Redeem is the reverse."));
 
-  root.append(el('fieldset', {}, el('legend', {}, '3 · Delivery versus payment (bond for cash)'),
+  const dvpFieldset = el('fieldset', {}, el('legend', {}, 'Delivery versus payment (bond for cash)'),
     el('div', { class: 'row' }, 'Harbour sells', el('input', { type: 'number', min: 1, value: val('dvpQty', 10), style: 'width:70px', 'aria-label': 'bond quantity', oninput: (e) => (form.dvpQty = e.target.value) }), '× CAN-2031 to Pinnacle for', amt('dvpCash', '10000')),
     el('div', { class: 'row' },
       el('button', { onclick: () => act({ kind: 'dvp', seller: 'MPL:harbour', buyer: 'NSR:pinnacle', qty: val('dvpQty', 10), cash: val('dvpCash', '10000') }, 'DvP.') }, 'Settle DvP'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'dvp', seller: 'MPL:harbour', buyer: 'NSR:pinnacle', qty: 5000, cash: '10' }, 'DvP with more bonds than Harbour holds.') }, 'Try to sell bonds it does not own')),
-    el('div', { class: 'hint' }, 'Both legs land in one block or neither does.')));
+    el('div', { class: 'hint' }, 'Both legs land in one block or neither does.'));
 
-  root.append(el('fieldset', {}, el('legend', {}, '4 · Settlement position (prefunded with central-bank money)'),
+  const settlementFieldset = el('fieldset', {}, el('legend', {}, 'Settlement position (prefunded with central-bank money)'),
     el('div', { class: 'row' }, sel('spWho', issuers, 'MPL'), amt('spAmt', '100000')),
     el('div', { class: 'row' },
       el('button', { class: 'ghost', onclick: () => act({ kind: 'fund', issuer: val('spWho', 'MPL'), amount: val('spAmt', '100000') }, 'Fund position.') }, 'Fund position'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'defund', issuer: val('spWho', 'MPL'), amount: val('spAmt', '100000') }, 'Defund position.') }, 'Defund'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'defund', issuer: val('spWho', 'MPL'), amount: fmt(S.issuers.find((i) => i.id === val('spWho', 'MPL')).sp).replace(/[$,]/g, '') }, 'Drain position.') }, 'Drain all')),
-    el('div', { class: 'hint' }, 'A payer can only send what its position covers. Drain it, then pay: it is refused, or queued for netting.')));
+    el('div', { class: 'hint' }, 'A payer can only send what its position covers. Drain it, then pay: it is refused, or queued for netting.'));
 
-  root.append(el('fieldset', {}, el('legend', {}, '5 · Break things'),
+  const breakFieldset = el('fieldset', {}, el('legend', {}, 'Break things'),
     el('div', { class: 'row' },
       el('button', { class: 'danger', onclick: () => act({ kind: 'chaos', type: 'inflate' }, 'Ledger defect.') }, 'Ledger defect: unminted tokens'),
       el('button', { class: 'danger', onclick: () => act({ kind: 'chaos', type: 'core_loss', issuer: 'MPL' }, 'Core data loss.') }, 'Core loses 30% of its balance'),
@@ -269,16 +288,16 @@ function renderActions() {
     el('div', { class: 'row' },
       el('button', { class: 'ghost', onclick: () => act({ kind: 'corePause', on: !S.corePaused }, 'Core posting.') }, S.corePaused ? 'Resume core posting' : 'Pause core posting (slow core)'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'advance', seconds: 960 }, 'Clock.') }, 'Advance clock 16 min')),
-    el('div', { class: 'hint' }, 'Red buttons corrupt state or the core; grey buttons are attacks the kernel must refuse. Pause the core, pay across banks, then advance the clock: the in-flight amounts age into a quarantine.')));
+    el('div', { class: 'hint' }, 'Red buttons corrupt state or the core; grey buttons are attacks the kernel must refuse. Pause the core, pay across banks, then advance the clock: the in-flight amounts age into a quarantine.'));
 
-  root.append(el('fieldset', {}, el('legend', {}, '6 · ISO 20022 gateway (pacs.008 in, pacs.002 out)'),
+  const isoFieldset = el('fieldset', {}, el('legend', {}, 'ISO 20022 gateway (pacs.008 in, pacs.002 out)'),
     el('textarea', { 'aria-label': 'pacs.008 message', rows: 9, style: 'width:100%;font:12px var(--mono);border:1px solid var(--hair);border-radius:6px;padding:8px;background:var(--card);color:var(--ink)', oninput: (e) => (form.isoXml = e.target.value) }, form.isoXml || ''),
     el('div', { class: 'row' },
       el('button', { class: 'ghost', onclick: async () => { form.isoXml = await (await fetch('/api/iso/sample?amount=25000.00')).text(); form.isoOut = ''; renderActions(); } }, 'New sample message'),
       el('button', { onclick: async () => { const r = await fetch('/api/iso/pacs008', { method: 'POST', body: form.isoXml || '' }); form.isoOut = await r.text(); await refresh(); } }, 'Send pacs.008')),
-    form.isoOut ? el('pre', { style: 'margin:8px 0 0;padding:8px;border:1px solid var(--hair);border-radius:6px;overflow:auto;font:12px var(--mono);background:var(--card)' }, form.isoOut) : el('div', { class: 'hint' }, 'The payment UETR becomes the ledger instruction id, so sending the same message twice is refused as a duplicate. Edit the amount or accounts, or break the XML.')));
+    form.isoOut ? el('pre', { style: 'margin:8px 0 0;padding:8px;border:1px solid var(--hair);border-radius:6px;overflow:auto;font:12px var(--mono);background:var(--card)' }, form.isoOut) : el('div', { class: 'hint' }, 'The payment UETR becomes the ledger instruction id, so sending the same message twice is refused as a duplicate. Edit the amount or accounts, or break the XML.'));
 
-  root.append(el('fieldset', {}, el('legend', {}, '8 · Escrow (T4) / PayOnEvent (T5)'),
+  const escrowFieldset = el('fieldset', {}, el('legend', {}, 'Escrow / PayOnEvent'),
     el('div', { class: 'row' }, 'id', el('input', { type: 'text', 'aria-label': 'escrow id', value: val('escId', 'e1'), style: 'width:70px', oninput: (e) => (form.escId = e.target.value) }),
       sel('escFrom', accts, 'MPL:acme'), '→', sel('escTo', accts, 'NSR:cedar'), amt('escAmt', '500'),
       el('label', { class: 'muted' }, el('input', { type: 'checkbox', checked: !!form.escEvent, onchange: (e) => (form.escEvent = e.target.checked) }), ' event-gated (needs the delivery oracle)')),
@@ -287,26 +306,26 @@ function renderActions() {
       el('button', { class: 'ghost', onclick: () => act({ kind: 'escrowRelease', escrowId: val('escId', 'e1') }, 'Escrow release.') }, 'Release'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'eventRelease', escrowId: val('escId', 'e1') }, "Release on the 'delivery' event.") }, "Release on 'delivery' event"),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'escrowRefund', escrowId: val('escId', 'e1') }, 'Escrow refund.') }, 'Refund (after expiry)')),
-    el('div', { class: 'hint' }, "Locked funds sit in a reserved account at the beneficiary's issuer - not yet the beneficiary's own balance. A plain lock releases with the payer's own key; an event-gated one only releases against the 'delivery' oracle's signature, never the payer's key. Expiry is a fixed 2 minutes for this demo - use \u201cAdvance clock\u201d above to skip past it, then Refund.")));
+    el('div', { class: 'hint' }, "Locked funds sit in a reserved account at the beneficiary's issuer - not yet the beneficiary's own balance. A plain lock releases with the payer's own key; an event-gated one only releases against the 'delivery' oracle's signature, never the payer's key. Expiry is a fixed 2 minutes for this demo - use “Advance clock” above to skip past it, then Refund."));
 
-  root.append(el('fieldset', {}, el('legend', {}, '9 · Standing sweep (T6, same issuer only)'),
+  const sweepFieldset = el('fieldset', {}, el('legend', {}, 'Standing sweep (same issuer only)'),
     el('div', { class: 'row' }, 'id', el('input', { type: 'text', 'aria-label': 'sweep id', value: val('swId', 's1'), style: 'width:70px', oninput: (e) => (form.swId = e.target.value) }),
       sel('swFrom', accts, 'MPL:acme'), '→', sel('swTo', accts, 'MPL:harbour'), 'keep', amt('swKeep', '400000')),
     el('div', { class: 'row' },
       el('button', { onclick: () => act({ kind: 'registerSweep', sweepId: val('swId', 's1'), from: val('swFrom', 'MPL:acme'), to: val('swTo', 'MPL:harbour'), keepAmount: val('swKeep', '400000') }, 'Sweep registered.') }, 'Register'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'cancelSweep', sweepId: val('swId', 's1') }, 'Sweep cancelled.') }, 'Cancel')),
-    el('div', { class: 'hint' }, 'Fires automatically at the end of every block once the source rises above "keep" - no separate instruction needed. Register, then Mint into the same account: watch the excess move by itself.')));
+    el('div', { class: 'hint' }, 'Fires automatically at the end of every block once the source rises above "keep" - no separate instruction needed. Register, then Mint into the same account: watch the excess move by itself.'));
 
-  root.append(el('fieldset', {}, el('legend', {}, '10 · Batch (T7): several legs, atomic'),
+  const batchFieldset = el('fieldset', {}, el('legend', {}, 'Batch: several legs, atomic'),
     el('div', { class: 'row' }, sel('bFrom1', accts, 'MPL:acme'), '→', sel('bTo1', accts, 'NSR:cedar'), amt('bAmt1', '100')),
     el('div', { class: 'row' }, sel('bFrom2', accts, 'NSR:cedar'), '→', sel('bTo2', accts, 'MPL:acme'), amt('bAmt2', '200')),
     el('div', { class: 'row' },
       el('button', { onclick: () => act({ kind: 'batchDemo', from1: val('bFrom1', 'MPL:acme'), to1: val('bTo1', 'NSR:cedar'), amount1: val('bAmt1', '100'), from2: val('bFrom2', 'NSR:cedar'), to2: val('bTo2', 'MPL:acme'), amount2: val('bAmt2', '200') }, 'Batch.') }, 'Run both legs atomically'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'batchEmpty' }, 'Empty batch.') }, 'Try an empty batch'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'batchNested', from1: val('bFrom1', 'MPL:acme'), to1: val('bTo1', 'NSR:cedar'), amount1: val('bAmt1', '100') }, 'Nested batch.') }, 'Try a batch inside a batch')),
-    el('div', { class: 'hint' }, 'Both legs settle in one block or neither does - one shared rollback, the same mechanism DvP already uses. Drain the second leg\u2019s issuer position first (section 4) and the whole batch is refused with nothing moved, including the first leg.')));
+    el('div', { class: 'hint' }, "Both legs settle in one block or neither does - one shared rollback, the same mechanism DvP already uses. Drain the second leg's issuer position first (Everyday banking tab) and the whole batch is refused with nothing moved, including the first leg."));
 
-  root.append(el('fieldset', {}, el('legend', {}, '7 · Recover'),
+  const recoverFieldset = el('fieldset', {}, el('legend', {}, 'Recover'),
     el('div', { class: 'row' },
       el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'repair' }, 'Patch.') }, 'Patch the ledger defect'),
       el('button', { class: 'go', onclick: () => act({ kind: 'chaos', type: 'reattest', issuer: 'MPL' }, 'Reconcile.') }, 'Maple re-attests true balance'),
@@ -315,7 +334,12 @@ function renderActions() {
     el('div', { class: 'row' },
       el('button', { class: 'ghost', onclick: async () => { const r = await api('/api/verify'); say({ ok: r.ok, error: r.ok ? '' : 'REPLAY_MISMATCH', message: r.ok ? `Replayed ${r.blocks} blocks from genesis: identical state root ${r.stateRoot.slice(0, 16)}…` : 'An independent replay from genesis disagrees with the live state: something changed state outside the transaction log.' }, 'Verify.'); } }, 'Verify: replay from genesis'),
       el('button', { class: 'ghost', onclick: async () => { say({ ok: true, message: 'Running 20,000 signed instructions through the kernel…' }); const r = await api('/api/bench'); say({ ok: r.invariantsHold, error: r.invariantsHold ? '' : 'INVARIANT', message: `${r.instructionsPerSecond.toLocaleString()} instructions/s (median block ${r.blockMsMedian} ms for ${r.blockSize}), all ${r.accepted.toLocaleString()} accepted, invariants hold. ${r.caveat}` }, 'Benchmark.'); } }, 'Benchmark kernel'),
-      el('button', { class: 'ghost', onclick: () => act({ kind: 'reset' }, 'Reset.') }, 'Reset to genesis'))));
+      el('button', { class: 'ghost', onclick: () => act({ kind: 'reset' }, 'Reset.') }, 'Reset to genesis')));
+
+  if (tab === 'everyday') root.append(payFieldset, mintFieldset, settlementFieldset);
+  else if (tab === 'advanced') root.append(dvpFieldset, escrowFieldset, sweepFieldset, batchFieldset);
+  else if (tab === 'messaging') root.append(isoFieldset);
+  else if (tab === 'break') root.append(breakFieldset, recoverFieldset);
 }
 
 function renderInvariants() {
