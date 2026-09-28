@@ -300,6 +300,57 @@ is treated as an outside party and sees no issuer's book in detail.
       correctly out of scope.
 - [x] `npm test` stays green; new tests in `test/confidentiality.test.js`.
 
+### [ ] 4.2 External-CSD DvP: the spec's own named conditional-settlement scenario
+
+Continued 2026-09-28. `02-technical-implementation.md` §2.4 names a specific
+scenario the launch-set templates must cover but the native `tx_DVP` handler
+cannot: "Bond at an external CSD (CDS): **conditional, not atomic**, via an
+Escrow/PayOnEvent template released by a signed CSD confirmation (sese.025)
+with deadline and refund path. Say so plainly; the residual risk window is
+defined." Native `tx_DVP` always assumes *both* legs are on Concord; this
+scenario is cash-only on Concord (the security lives at an outside
+depository), which is exactly what Escrow + PayOnEvent (roadmap 1.1/1.2) were
+built for — the value here is composing them *correctly* for this specific,
+named, regulated shape, not inventing new kernel mechanism.
+
+**Design.** A dedicated named oracle key, `csd-confirmation` (distinct from
+the generic `delivery`/`inspection` examples, representing the external
+depository's own signing authority), plus one convenience method,
+`Network.externalCsdDvp(buyer, seller, escrowId, cash, { deadlineSeconds })`:
+locks the cash leg in escrow, gated on the `csd-confirmation` event, with an
+expiry `deadlineSeconds` out. Release is the existing `eventRelease`; refund
+after the deadline is the existing `escrowRefund` — no new kernel handler.
+The **residual risk window**, stated plainly per the spec's own instruction:
+from the moment cash locks to the moment the CSD confirms (funds committed,
+trade not yet final) or the deadline passes (funds return, trade did not
+happen) — bounded exactly by `deadlineSeconds`, chosen by the buyer at lock
+time, never open-ended.
+
+**Depends on:** 1.1 (Escrow), 1.2 (PayOnEvent) — reuses both unchanged.
+
+**Acceptance criteria**
+- [ ] `externalCsdDvp` locks only the cash leg; `s.securities` and every
+      account's `sec` map are untouched by it — proving this is genuinely
+      decoupled from Concord's own securities ledger, unlike native `tx_DVP`.
+- [ ] A correct, signed CSD confirmation releases the cash to the seller;
+      release under any other key (including the buyer's own, and the
+      generic `delivery`/`inspection` oracles) is rejected.
+- [ ] Before `deadlineSeconds` elapses, a refund is rejected
+      (`ESCROW_NOT_EXPIRED`) — the residual risk window is still open, and the
+      cash stays locked, not returned early on a whim.
+- [ ] After the deadline, with no confirmation received, a refund succeeds
+      and returns the cash to the buyer — the window closes without silently
+      leaving money stuck.
+- [ ] A confirmation that arrives *after* the deadline (the CSD was slow) is
+      documented as a real, named risk in this design, not silently handled
+      either way — the test asserts today's actual behaviour (whichever the
+      code does first) rather than asserting an untested intention.
+- [ ] `npm test` stays green; new tests in `test/external-csd-dvp.test.js`.
+- [ ] `poc/docs/invariant-charter.md` or `poc/README.md` states the residual
+      risk window in the same terms as this section, so the honesty file and
+      the roadmap never disagree about what "conditional, not atomic" means
+      here.
+
 ## Blocked / needs input
 
 *(Populated during the loop if something needs a decision only Caleb can
