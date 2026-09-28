@@ -1,4 +1,4 @@
-# Concord Network — Technical Implementation Specification
+# DepositX Network — Technical Implementation Specification
 
 **Status:** Consolidated design for ratification at the Architecture Review Board (target 11 Dec 2026). Synthesises the CTO and CISO/SRE seat memos and applies the board resolutions in `00-board-resolutions.md` §3.
 **Depth:** this document fixes decisions, interfaces, invariants, targets and the build plan. The full component detail, threat tables and runbook outlines live in `board/cto-technical-implementation.md` and `board/ciso-security-resilience.md`; section references below point there.
@@ -10,7 +10,7 @@
 
 | ID | Decision | Rationale | Source |
 |---|---|---|---|
-| T-1 | **Ledger = purpose-built deterministic Rust state machine ("Concord Ledger Core") on a BFT engine, CometBFT first, engine swappable behind a `ConsensusHost` interface. No general-purpose VM.** Templates are native reviewed modules. | The blueprint's own non-goals (no user code) make a VM pure attack surface; the invariants can live in a ~10 kLoC verifiable kernel. | CTO §1 |
+| T-1 | **Ledger = purpose-built deterministic Rust state machine ("DepositX Ledger Core") on a BFT engine, CometBFT first, engine swappable behind a `ConsensusHost` interface. No general-purpose VM.** Templates are native reviewed modules. | The blueprint's own non-goals (no user code) make a VM pure attack surface; the invariants can live in a ~10 kLoC verifiable kernel. | CTO §1 |
 | T-2 | **Decide by measurement, not matrix.** 10-week bake-off, 12 Oct–18 Dec 2026: custom vs Canton/Daml vs Besu QBFT, identical workload, hard thresholds. **Plan B = Besu QBFT** (staffing/schedule failure); **Plan C = Canton** (confidentiality failure). | Matrix score is 80.2 custom / 72.6 Besu / 69.3 Canton / 66.0 Corda, but a schedule-heavy weighting flips the winner to Besu (74.8). Nine-figure money should not ride on a scored guess. | CTO §1.2–1.3 |
 | T-3 | **Par is enforced in the state machine, below any contract layer.** Seven invariants P1–P7 checked at end of every block; graded halt. | Only place a halt is enforceable against a buggy or malicious template. | CTO §2.3 |
 | T-4 | **Token model X:** a cross-issuer payment burns payer-issuer tokens and mints payee-issuer tokens, with issuer-to-issuer value moving through prefunded settlement positions. Payee ends up holding a claim on their own bank. Account-based, novation-style. **Drop "bearer".** | Bearer circulation (model Y) creates cross-issuer exposure and changes CDIC attribution. | CTO §0, Legal §5 |
@@ -23,7 +23,7 @@
 | T-11 | **Capacity:** requirement is demand-derived (start 250/s sustained, 1,000/s burst, sizing model due 23 Oct); **provision 500/s at go-live; prove 5,000/s in the lab.** | Sustained 5,000/s is about 5× the entire Canadian all-rail volume **[V]** and ~600× the CFO's high-case average. | 00 §3 C3 |
 | T-12 | **SLO ladder:** 99.9% pilot → 99.95% at G2 → 99.99% contractual at go-live → 99.999% as measured design objective. Freeze the SLI definition and attribution rules in the rulebook by end of Phase 2. | 99.999% is 5.26 min/yr; the 15-min RTO alone is ~3 years of budget; region loss is arithmetically incompatible with BFT quorum at 2 regions. | CISO §4.1, CTO C1 |
 | T-13 | **Crypto-agility (`suite_id`) from day one; PQ-hybrid encryption for on-ledger confidential data by Phase 2–3, PQ signatures Phase 4.** | Harvest-now-decrypt-later applies to confidential data today. | CISO §0.1 |
-| T-14 | **Mandatory Concord Customer Security Programme (CSP)** for member endpoints (tiers A/B/C, annual attestation) as a condition of membership. | Payment networks are historically breached at the member endpoint, not the core. | CISO §0.1 |
+| T-14 | **Mandatory DepositX Customer Security Programme (CSP)** for member endpoints (tiers A/B/C, annual attestation) as a condition of membership. | Payment networks are historically breached at the member endpoint, not the core. | CISO §0.1 |
 
 ## 2. Architecture
 
@@ -71,7 +71,7 @@ For issuer *i* at height *h*: S_i = sum of token balances; M_i/B_i = cumulative 
 | **P6 Authority** | Only issuer i's mint-policy key set changes M_i; only its signature debits its accounts; operator keys change no balance | Reject |
 | **P7 Halt monotonicity** | Once halted, only a `Resume` co-signed by governance threshold + affected issuer(s) + BoC observer key clears it | Structural |
 
-**Graded halt (needs regulator agreement; rulebook item).** Kernel-integrity breaks and over-issuance halt the whole network. Unexplained under-issuance or core-side lag **quarantines only the issuer** (freezes its mint, redeem and outbound Convert); escalation to global halt if uncleared in 15 minutes (proposed). **Anyone with a registered reconciler key can pull the fire alarm; restart is expensive** (P7). The check is a deterministic end-of-block hook, so every validator reaches the same verdict from the same state; **settlement stops, consensus does not**, so observers stay in sync. Banks must hold rehearsed "Concord-off" fallback playbooks (Lynx or wires) because Concord has no bridge to another rail by design.
+**Graded halt (needs regulator agreement; rulebook item).** Kernel-integrity breaks and over-issuance halt the whole network. Unexplained under-issuance or core-side lag **quarantines only the issuer** (freezes its mint, redeem and outbound Convert); escalation to global halt if uncleared in 15 minutes (proposed). **Anyone with a registered reconciler key can pull the fire alarm; restart is expensive** (P7). The check is a deterministic end-of-block hook, so every validator reaches the same verdict from the same state; **settlement stops, consensus does not**, so observers stay in sync. Banks must hold rehearsed "DepositX-off" fallback playbooks (Lynx or wires) because DepositX has no bridge to another rail by design.
 
 **Three-way reconciliation** every 60 s and on each mint/redeem completion: (1) ledger S_i, (2) core control-GL L_i, (3) the enumerated in-flight registry on both sides, recomputed independently by the operator and by each observer.
 
@@ -80,7 +80,7 @@ For issuer *i* at height *h*: S_i = sum of token balances; M_i/B_i = cumulative 
 ### 2.4 Settlement services
 
 - **Cross-issuer payment:** `bal_payer(T_A) −= x; bal_payee(T_B) += x; SP_A −= x; SP_B += x`, requires A's and B's signatures. B's acceptance is pre-collected over the bilateral channel so nothing is ever debited then stuck.
-- **DvP.** Bond native on Concord (Phase 3): fully atomic in one block. Bond at an external CSD (CDS): **conditional, not atomic**, via an Escrow/PayOnEvent template released by a signed CSD confirmation (sese.025) with deadline and refund path. Say so plainly; the residual risk window is defined. **[V CDS interface and ISO 20022 readiness]**
+- **DvP.** Bond native on DepositX (Phase 3): fully atomic in one block. Bond at an external CSD (CDS): **conditional, not atomic**, via an Escrow/PayOnEvent template released by a signed CSD confirmation (sese.025) with deadline and refund path. Say so plainly; the residual risk window is defined. **[V CDS interface and ISO 20022 readiness]**
 - **PvP (cross-currency):** Phase 4; needs cross-network atomicity (timelock, coordinator or light-client relay); design deferred.
 - **Liquidity-saving netting (Phase 3):** instructions failing only on SP sufficiency enter a queue (they have debited nothing). Once per second and on funding events a deterministic in-consensus function runs bilateral offset then multilateral gridlock resolution, bounded by queue cap (10,000) and iteration cap. Target ≥30% lower peak liquidity need on replayed anonymised Lynx data **[V; depends on data access]**. **Rulebook wording:** a queued instruction has debited nothing and is not yet a payment (this reconciles the blueprint's "no pending state").
 - **Funding and defunding** of SP against the anchor via `camt.050`/`camt.054` in anchor hours (Lynx is not 24/7 **[V hours]**); per-issuer minimum-buffer alerts at 30% of trailing-week peak outflow; weekend liquidity facility is a Legal/BoC question.
@@ -121,9 +121,9 @@ A **leakage budget** (which party class may see which field) must be ratified by
 
 - **Monorepo (Bazel), Rust kernel, TypeScript and JVM SDKs.** Two-party bit-for-bit reproducible builds, SLSA L3 provenance, CycloneDX SBOMs, vendored vetted dependencies, two-person review for kernel and crypto. Apache-2.0 under a neutral foundation with source escrow **[Legal to confirm]**.
 - **Formal verification:** TLA+ for protocols (mint/redeem, settlement, DR fencing); Verus and Kani on the kernel; a Lean reference model with differential fuzzing (a second implementation of the kernel semantics). **A 6-week Verus spike (S2) decides how far "proofs published" can go**; fallback is Kani + TLA+ + Lean + external audit, with "specified and model-checked" wording.
-- **Environments:** dev, test, perf (WAN-emulated), certification (prod-like), production; certification is what banks integrate against; a Concord-run **Bot Bank** counterparty removes dependence on other banks being ready.
+- **Environments:** dev, test, perf (WAN-emulated), certification (prod-like), production; certification is what banks integrate against; a DepositX-run **Bot Bank** counterparty removes dependence on other banks being ready.
 - **CI gates:** determinism (10M-transaction corpus produces byte-identical state roots on x86_64 and aarch64, on every commit); invariant property tests; fuzzing; SBOM and provenance; independent rebuild on every release candidate.
-- **Release policy:** quarterly minor releases, annual major; N and N-1 supported; protocol changes activate at a governance-set height only when every voting validator reports ready; validator activation staged (learner → shadow → voting); Concord patches get pre-approved standard-change status in each bank's ITSM.
+- **Release policy:** quarterly minor releases, annual major; N and N-1 supported; protocol changes activate at a governance-set height only when every voting validator reports ready; validator activation staged (learner → shadow → voting); DepositX patches get pre-approved standard-change status in each bank's ITSM.
 
 ## 5. Capacity and performance model (planning estimates)
 

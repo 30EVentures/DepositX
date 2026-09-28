@@ -1,5 +1,5 @@
 // Roadmap 4.2: 02-technical-implementation.md section 2.4's own named scenario -
-// bond at an external depository, cash-only on Concord, released by a signed
+// bond at an external depository, cash-only on DepositX, released by a signed
 // outside confirmation, with a deadline and refund path ("say so plainly; the
 // residual risk window is defined"). Composes Escrow (1.1) + PayOnEvent (1.2)
 // exactly as built; no new kernel handler. externalCsdDvp is a thin, correctly-
@@ -25,7 +25,7 @@ test('external-CSD DvP locks only the cash leg: the securities ledger is untouch
   assert.ok(r.ok, r.message);
   assert.equal(n.ledger.s.securities.size, registryBefore, 'no new security was registered');
   assert.equal(canon(n.ledger.s.accounts.get('MPL:harbour').sec), harbourSecBefore, 'the buyer\'s own security holdings are unchanged');
-  assert.equal(canon(n.ledger.s.accounts.get('NSR:pinnacle').sec), pinnacleSecBefore, 'the seller gets no security credited by this call - that happens at the external CSD, off Concord');
+  assert.equal(canon(n.ledger.s.accounts.get('NSR:pinnacle').sec), pinnacleSecBefore, 'the seller gets no security credited by this call - that happens at the external CSD, off DepositX');
   allOk(n);
 });
 

@@ -1,4 +1,4 @@
-# Concord Network: Programme Plan and Business Model
+# DepositX Network: Programme Plan and Business Model
 
 **Seat:** Chief Financial Officer and Chief Operating Officer / Programme Director, founding board
 **Date:** 25 September 2026
@@ -285,7 +285,7 @@ Phase 4 (retail deposit tokens, programmable consumer payments, cross-border cor
 | L3 | Operator-funded reference adapter and certification kit; cuts bank integration labour about 12% (12% x $108M bank labour = $13M) | 13 | Operator must ship the kit early (Phase 1). |
 | L4 | Fixed-price, risk-sharing SI contracts for adapters and test automation | 8 (expected value) | Higher unit price; less flexibility. |
 | L5 | Secondees in place of contractors (18 FTE x 2 years x $60k premium) | 2.2 | Conflict and neutrality protocols needed. |
-| L6 | Shared penetration-test programme for Concord components (six banks x $0.3M avoided) | 1.8 | Independence from the operator's own testing. |
+| L6 | Shared penetration-test programme for DepositX components (six banks x $0.3M avoided) | 1.8 | Independence from the operator's own testing. |
 | | **Total** | **about 47 (10% of base)** | |
 
 Levers do not rescue the bank NPV (Section 3.6); they lower the hurdle from $38M to $36M of annual benefit per Tier A bank.
@@ -441,12 +441,12 @@ Range: $45M (lean, outsourced NOC, about 60 FTE, about $39M at floor) to $80M (h
 
 ### 3.2 Recommended stance: cost recovery with a reserve, not profit
 
-**Recommendation.** Run Concord as a **cost-recovery utility**: fees set to recover run cost, fund a reinvestment reserve of about 8% of run cost until the reserve equals 12 months of opex, and return founders' contributed capital at **1.0x plus CPI** through a capital recovery component. No dividends above that. After capital is returned, surplus goes to fee rebates.
+**Recommendation.** Run DepositX as a **cost-recovery utility**: fees set to recover run cost, fund a reinvestment reserve of about 8% of run cost until the reserve equals 12 months of opex, and return founders' contributed capital at **1.0x plus CPI** through a capital recovery component. No dividends above that. After capital is returned, surplus goes to fee rebates.
 
 **Why:**
 
 1. **Neutrality.** A profit-maximising operator owned by six competing banks would optimise price against its own owners' customers, and a regulator will read it as a toll booth on an essential settlement service. Cost recovery makes the fee methodology the object of governance, not the margin.
-2. **Regulatory fit.** PFMI Principle 21 (efficiency) and Principle 23 (disclosure of fees and rules) point the same way **[verify]**. Peers Concord is measured against (Payments Canada) are not-for-profit **[verify]**.
+2. **Regulatory fit.** PFMI Principle 21 (efficiency) and Principle 23 (disclosure of fees and rules) point the same way **[verify]**. Peers DepositX is measured against (Payments Canada) are not-for-profit **[verify]**.
 3. **Adoption.** The addressable market is the banks themselves. A low, transparent fee helps small institutions join, which is what makes the network effect and the north-star metric (95% of eligible wholesale flow) reachable.
 4. **The economics do not support profit anyway.** At base volumes the network does not recover its run cost at the assumed list price, let alone $258M of build capital.
 5. **Founders are customers first.** Their return is deposit retention, liquidity savings and reconciliation savings (Section 3.6), not distributions.
@@ -533,7 +533,7 @@ All benefits are **assumptions for each bank's Treasury to overwrite**. They are
 | Reconciliation and operations | FTE avoided x $160k. Low 10; Base 25; High 50 FTE | 1.5 | 4.0 | 8.0 |
 | New revenue from programmable payments to clients | Fee income | 0 | 5.0 | 20.0 |
 | **Gross benefit** | | **3.7** | **20.4** | **70.0** |
-| Concord fees paid (19% share of the lesser of list revenue and run cost + $10M capital recovery) | | (4.3) | (9.6) | (15.2) |
+| DepositX fees paid (19% share of the lesser of list revenue and run cost + $10M capital recovery) | | (4.3) | (9.6) | (15.2) |
 | Offset: legacy rail fees avoided | | 1.0 | 2.5 | 6.0 |
 | Bank's own incremental run cost | | (9.0) | (10.0) | (12.0) |
 | **Net steady-state annual benefit** | | **(8.6)** | **+3.3** | **+48.8** |
@@ -642,7 +642,7 @@ All benefits are **assumptions for each bank's Treasury to overwrite**. They are
 | RG2 | Oversight and legal finality (designation under the payment clearing and settlement regime, plus rulebook and insolvency protections) | Bank of Canada; Minister of Finance consent | Underpins invariant II. **Highest schedule risk.** |
 | RG3 | Bank of Canada role: observer node and settlement anchor | Bank of Canada | Blueprint assumes central-bank money anchors interbank settlement; not confirmed (D1). |
 | RG4 | Prudential treatment: capital, liquidity, third-party risk, technology and cyber, operational resilience | OSFI (B-10, B-13, E-21 and the model-risk guideline **[verify current status]**) | Each bank's own approval to issue |
-| RG5 | Federal stablecoin regime carve-out for bank-issued deposit tokens | Finance Canada, Bank of Canada **[verify status of legislation]** | Avoids Concord being classified with stablecoins |
+| RG5 | Federal stablecoin regime carve-out for bank-issued deposit tokens | Finance Canada, Bank of Canada **[verify status of legislation]** | Avoids DepositX being classified with stablecoins |
 | RG6 | Travel Rule and reporting applicability to token transfers | FINTRAC | Compliance engine design |
 | RG7 | Privacy and data residency | OPC, Quebec CAI (Law 25) | Privacy-by-default design; Canadian residency |
 
@@ -694,7 +694,7 @@ Sum for a Tier A bank: 20 to 29 months of gated work, plus the up-front decision
 | Wave 2 | Remaining 3 to 4 founding issuers | Cut-over Oct to Nov 2029 |
 | Wave 3 | Later equity members and participants, hosted-node path for Tier C | From Q1 2030; capacity limited to two onboardings a quarter until G3b |
 
-**Bank change calendars and the real constraint.** Large banks freeze change from late November through January, and every large bank has competing regulatory-mandated programmes. Schedule cut-overs for autumn and spring. Ask each founder to put Concord on the same Enterprise change calendar as its Real-Time Rail and ISO 20022 work so the conflicts are visible at G0.
+**Bank change calendars and the real constraint.** Large banks freeze change from late November through January, and every large bank has competing regulatory-mandated programmes. Schedule cut-overs for autumn and spring. Ask each founder to put DepositX on the same Enterprise change calendar as its Real-Time Rail and ISO 20022 work so the conflicts are visible at G0.
 
 ### 4.6 Stage-gate governance
 
@@ -1070,7 +1070,7 @@ Likelihood and impact on a 1 to 5 scale. Exposure in dollars or months of delay 
 |---|---|---|---|
 | P1 | **Lean operator:** outsourced 24/7 NOC, about 60 FTE, cloud-managed, wholesale only | K4, or low-volume forecast | Run cost about $39M a year (Section 3.5); programme cost falls by about $60M to $80M (my estimate) |
 | P2 | **Alternative settlement anchor:** interbank settlement through Lynx or a sponsor bank rather than direct central-bank money | K8 | +6 to 12 months; changes the legal-finality argument |
-| P3 | **Interoperate, do not compete:** re-scope Concord as a standard and reference implementation to be operated by an existing FMI | K10, or K2 partial | Operator cost falls by more than half; ownership passes to the FMI |
+| P3 | **Interoperate, do not compete:** re-scope DepositX as a standard and reference implementation to be operated by an existing FMI | K10, or K2 partial | Operator cost falls by more than half; ownership passes to the FMI |
 | P4 | **Narrow launch:** capped value, fewer templates, no netting at go-live, single issuer class | Schedule risk at G2 | Earlier live date; lower revenue |
 
 **Stop-loss discipline.** Each gate memo shows the spend committed to date and the stranded cost if the board stops at that gate. Operator-only estimate: at G0 about $13M, at G1 about $60M (12.9 + 46.5, plus at-risk commitments), at G2 about $175M (12.9 + 46.5 + 115.4). Bank-side spend is additional and sits with each bank. The board should look at these numbers before every release.

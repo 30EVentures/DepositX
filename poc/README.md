@@ -1,16 +1,16 @@
-# Concord proof of concept
+# DepositX proof of concept
 
-A working, runnable model of the Concord ledger kernel from `../02-technical-implementation.md`:
+A working, runnable model of the DepositX ledger kernel from `../02-technical-implementation.md`:
 per-issuer deposit tokens, prefunded settlement positions, atomic cross-bank payment and DvP,
 Escrow/PayOnEvent/Batch/Standing-Sweep (the spec's full Phase 1+2 template launch set, §2.5),
 liquidity-saving netting, the seven par invariants (P1–P7), and the graded halt
 (quarantine one issuer vs halt the network). Zero dependencies; Node 20+.
 
 ```
-cd ~/Concord/poc
+cd ~/DepositX/poc
 npm test                                  # 60 tests (~45 s)
 npm start                                 # dashboard at http://127.0.0.1:8787 (in memory)
-CONCORD_DATA=./data npm start             # same, durable: survives restarts, tamper-evident
+DEPOSITX_DATA=./data npm start             # same, durable: survives restarts, tamper-evident
 npm run bench                             # kernel throughput
 node src/modelcheck.js 6                  # explicit-state model check: ~12,000 states, ~100 s
 ```
@@ -36,7 +36,7 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 | Netting | `tx_NET_CYCLE` gridlock resolution; mutual $5k payments net to zero on a $1k position |
 | Escrow, held at the beneficiary's issuer (T4) | `tx_ESCROW_LOCK/RELEASE/REFUND`: lock is a Transfer/Convert into a reserved-id account, so no new conservation math; refund only after expiry (`escrow.test.js`) |
 | PayOnEvent (T5) | `tx_EVENT_RELEASE`: release gated on a named oracle signature registered in genesis, checked against the escrow's *own* stored event name, not the caller's claim (`escrow.test.js`) |
-| External-CSD DvP (section 2.4's own named scenario) | `Network.externalCsdDvp`/`csdConfirm`: the spec's own conditional (not atomic) bond settlement — the security lives at an outside depository, so only the cash leg is on Concord, released by a signed `csd-confirmation` oracle with a deadline and refund path. **Residual risk window, stated plainly:** from lock to confirmation-or-deadline, exactly `[now, now + deadlineSeconds]` — cash cannot be refunded early, and cannot be stranded past the deadline. A confirmation that arrives after the deadline still succeeds if nobody has refunded first; this is a documented real risk of the design, not a silently-assumed one (`external-csd-dvp.test.js`) |
+| External-CSD DvP (section 2.4's own named scenario) | `Network.externalCsdDvp`/`csdConfirm`: the spec's own conditional (not atomic) bond settlement — the security lives at an outside depository, so only the cash leg is on DepositX, released by a signed `csd-confirmation` oracle with a deadline and refund path. **Residual risk window, stated plainly:** from lock to confirmation-or-deadline, exactly `[now, now + deadlineSeconds]` — cash cannot be refunded early, and cannot be stranded past the deadline. A confirmation that arrives after the deadline still succeeds if nobody has refunded first; this is a documented real risk of the design, not a silently-assumed one (`external-csd-dvp.test.js`) |
 | Batch, several legs atomic (T7) | `tx_BATCH` dispatches each leg to its own existing handler against the same journal `#execTx` already rolls back on any error — no separate rollback logic; nesting is rejected explicitly (`batch.test.js`) |
 | Standing/Sweep, same-issuer (T6) | `tx_REGISTER_SWEEP` + `#runSweeps`, fired deterministically at `#endOfBlock` — the same hook the graded halt already runs from, so no separate instruction is needed for it to take effect (`sweep.test.js`) |
 | Deterministic, replayable | `verifyReplay()` rebuilds every block hash and state root from genesis, including Escrow/Sweep/Batch state; also detects out-of-band corruption |

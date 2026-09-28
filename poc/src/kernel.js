@@ -1,4 +1,4 @@
-// Concord Ledger Core, proof-of-concept kernel.
+// DepositX Ledger Core, proof-of-concept kernel.
 //
 // A deterministic state machine implementing the semantics in
 // 02-technical-implementation.md: per-issuer deposit tokens (model X), prefunded
@@ -78,7 +78,7 @@ const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
   if (!m) {
-    m = canon({ d: 'concord-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until });
+    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until });
     msgCache.set(tx, m);
   }
   return m;

@@ -1,9 +1,9 @@
 {
-  "name": "concord-poc",
+  "name": "depositx-poc",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Concord Network proof of concept: par kernel, the full launch-set templates (Transfer, Convert, DvP, Escrow, PayOnEvent, Batch, Standing/Sweep), graded halt, live dashboard. No dependencies.",
+  "description": "DepositX Network proof of concept: par kernel, the full launch-set templates (Transfer, Convert, DvP, Escrow, PayOnEvent, Batch, Standing/Sweep), graded halt, live dashboard. No dependencies.",
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",

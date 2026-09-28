@@ -1,10 +1,10 @@
-# Concord Network — Blueprint v0.9 (source of truth for the board)
+# DepositX Network — Blueprint v0.9 (source of truth for the board)
 
 Prepared by KPMG Financial Services Advisory for the Canadian Tokenized Deposit Working Group.
 Version 0.9 · 2 September 2026 · Illustrative — draft for discussion.
 Tagline: A settlement network for tokenized commercial-bank deposits — Canada.
 
-Premise: Commercial-bank money should move with the speed, programmability and finality of the internet — without leaving the regulated perimeter, and without ever breaking par. Concord is a proposed shared, permissioned network on which Canada's deposit-taking institutions issue **deposit tokens**: on-ledger claims against a specific OSFI-regulated bank, redeemable 1:1, CDIC-insurable wherever the underlying deposit is. NOT a stablecoin, NOT a CBDC, NOT a new unit of account.
+Premise: Commercial-bank money should move with the speed, programmability and finality of the internet — without leaving the regulated perimeter, and without ever breaking par. DepositX is a proposed shared, permissioned network on which Canada's deposit-taking institutions issue **deposit tokens**: on-ledger claims against a specific OSFI-regulated bank, redeemable 1:1, CDIC-insurable wherever the underlying deposit is. NOT a stablecoin, NOT a CBDC, NOT a new unit of account.
 
 ## 01 Vision
 Problem: treasurers wait for cut-offs; suppliers can't be paid on goods scan; tokenized bond cash legs settle T+1 or via unsupervised bridges; stablecoins offer speed outside the deposit franchise. Answer: make bank money itself move like data — settling continuously, carrying conditions, reconciling itself — while remaining a supervised deposit at every moment.
@@ -24,7 +24,7 @@ By party: Corporate treasurer (24/7 sweeps, supplier payments, sub-2s finality, 
 
 Non-goals: public permissionless chain or non-regulated validators; single mutualised consortium coin; arbitrary user-deployed smart contracts (reviewed template library only); displacing Lynx or the Real-Time Rail (interoperate/run alongside).
 
-North-star metrics: zero par breaks and zero client-money loss events cumulative; finality <2s median, <5s p99; by end of Phase 3 ≥95% of eligible wholesale interbank flow settle-able on Concord 24/7/365; any supervisory position query <60s from read-node.
+North-star metrics: zero par breaks and zero client-money loss events cumulative; finality <2s median, <5s p99; by end of Phase 3 ≥95% of eligible wholesale interbank flow settle-able on DepositX 24/7/365; any supervisory position query <60s from read-node.
 
 ## 02 Architecture
 Principles: one network, many issuers (shared ledger, per-issuer token contracts, one liquidity space, no bridges). Regulated operator (consortium-owned entity, published rulebook, direct supervisory oversight). Boring cryptography (BFT consensus, HSM keys, audited contracts; novelty confined to optional confidentiality layer). Privacy by default, disclosure by design. Standards first (ISO 20022 end to end; PFMI baseline; one reference core-banking adapter).

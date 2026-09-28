@@ -307,8 +307,8 @@ scenario the launch-set templates must cover but the native `tx_DVP` handler
 cannot: "Bond at an external CSD (CDS): **conditional, not atomic**, via an
 Escrow/PayOnEvent template released by a signed CSD confirmation (sese.025)
 with deadline and refund path. Say so plainly; the residual risk window is
-defined." Native `tx_DVP` always assumes *both* legs are on Concord; this
-scenario is cash-only on Concord (the security lives at an outside
+defined." Native `tx_DVP` always assumes *both* legs are on DepositX; this
+scenario is cash-only on DepositX (the security lives at an outside
 depository), which is exactly what Escrow + PayOnEvent (roadmap 1.1/1.2) were
 built for — the value here is composing them *correctly* for this specific,
 named, regulated shape, not inventing new kernel mechanism.
@@ -331,7 +331,7 @@ time, never open-ended.
 **Acceptance criteria**
 - [x] `externalCsdDvp` locks only the cash leg; `s.securities` and every
       account's `sec` map are untouched by it — proving this is genuinely
-      decoupled from Concord's own securities ledger, unlike native `tx_DVP`.
+      decoupled from DepositX's own securities ledger, unlike native `tx_DVP`.
 - [x] A correct, signed CSD confirmation releases the cash to the seller;
       release under any other key (including the buyer's own, and the
       generic `delivery`/`inspection` oracles) is rejected.

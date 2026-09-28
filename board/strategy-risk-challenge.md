@@ -1,7 +1,7 @@
-# Concord Network: Strategy and Risk Challenge Memo
+# DepositX Network: Strategy and Risk Challenge Memo
 
 **Seat:** Chief Strategy Officer / Chief Risk Officer (board's designated skeptic)
-**To:** Founding Board, Concord Network
+**To:** Founding Board, DepositX Network
 **Date:** 2026-09-25
 **Source document:** Blueprint v0.9 (KPMG, 2 Sept 2026), including its "Known issues" list
 **Status:** Board challenge. Recommends a re-scoped, gated plan; does not endorse the v0.9 roadmap as written.
@@ -14,13 +14,13 @@
 
 Three things changed in the 23 days since the blueprint was dated. The board must react to them in the next 30 days.
 
-1. **On 22 September 2026, six Canadian banks (BMO, CIBC, National Bank, RBC, Scotiabank, TD) jointly announced an exploration of a CAD tokenized-deposit system.** TD led the announcement. Phase one is interbank movement of tokenized deposits. The banks said other banks could join later. Press coverage says no vendor, governance vehicle, timeline, or Payments Canada role was named. This is the single most important fact for Concord. The blueprint's central adoption problem, "will the largest banks join?", is now a question of whether Concord is that initiative, a supplier to it, a second-tier complement to it, or irrelevant to it. **The founders must know within ten days which of those it is.** I could not verify how the Canadian Tokenized Deposit Working Group relates to the six banks' announcement.
+1. **On 22 September 2026, six Canadian banks (BMO, CIBC, National Bank, RBC, Scotiabank, TD) jointly announced an exploration of a CAD tokenized-deposit system.** TD led the announcement. Phase one is interbank movement of tokenized deposits. The banks said other banks could join later. Press coverage says no vendor, governance vehicle, timeline, or Payments Canada role was named. This is the single most important fact for DepositX. The blueprint's central adoption problem, "will the largest banks join?", is now a question of whether DepositX is that initiative, a supplier to it, a second-tier complement to it, or irrelevant to it. **The founders must know within ten days which of those it is.** I could not verify how the Canadian Tokenized Deposit Working Group relates to the six banks' announcement.
 2. **On 10 September 2026, OSFI stated that tokenized deposits are "not legally distinct from traditional deposits."** It finalized a crypto-asset capital and liquidity guideline effective 1 Nov 2026 (Oct FYE) or 1 Jan 2027 (Dec FYE). This removes the "regulatory perimeter" risk for the *product*. It leaves open the far harder questions about the *network*: legal settlement finality, operator oversight, and the settlement asset.
-3. **The Real-Time Rail is launching in Q4 2026 (phased, with broader availability through 2027).** Payments Canada's own Lynx completed its ISO 20022 migration in Nov 2025. Bank of Canada Project Samara (March 2026) settled a C$100M tokenized bond in wholesale central-bank money with RBC and TD, and concluded that efficiency gains were partly offset by complexity, liquidity costs, and new governance needs. The Bank of Canada joined BIS Project Agora in May 2026. Canada's wholesale tokenization agenda now has a state-backed track that Concord does not control.
+3. **The Real-Time Rail is launching in Q4 2026 (phased, with broader availability through 2027).** Payments Canada's own Lynx completed its ISO 20022 migration in Nov 2025. Bank of Canada Project Samara (March 2026) settled a C$100M tokenized bond in wholesale central-bank money with RBC and TD, and concluded that efficiency gains were partly offset by complexity, liquidity costs, and new governance needs. The Bank of Canada joined BIS Project Agora in May 2026. Canada's wholesale tokenization agenda now has a state-backed track that DepositX does not control.
 
 **The five sentences the board should take away:**
 
-- Concord's thesis is sound only if it solves one problem the blueprint does not: **what settles between Bank A and Bank B when a token moves.** The blueprint says central-bank money is the "settlement anchor" (Vision) but makes the Bank of Canada only an observer node (Architecture). That gap is the plan's largest hole, and it is larger than the ZK bet.
+- DepositX's thesis is sound only if it solves one problem the blueprint does not: **what settles between Bank A and Bank B when a token moves.** The blueprint says central-bank money is the "settlement anchor" (Vision) but makes the Bank of Canada only an observer node (Architecture). That gap is the plan's largest hole, and it is larger than the ZK bet.
 - "Finality is one thing" and "par, always" are marketing sentences, not engineering or legal facts. Neither can be delivered by the network alone. Both should be rewritten as *designed-for, measured, and cited* claims (Section 6).
 - The 5,000 tps target is not derived from any demand. It is likely 100 to 1,000 times what Canadian wholesale flow needs. It is self-inflicted risk, and it is what forces ZK at scale.
 - The lowest-regret wedge is **cross-bank, 24/7 own-account liquidity movement for multi-banked corporates and bank-to-bank/dealer securities cash legs**. It needs 2 to 3 banks, not 6, because it does not need counterparties on both sides of a payment.
@@ -72,29 +72,29 @@ The blueprint asserts a consortium network. It never argues it. There are four a
 
 **Where a consortium genuinely wins:** N banks connecting to one shared rulebook, one compliance surface, and one atomic-settlement space needs N integrations, not N(N-1)/2. For 6 banks that is 6 versus 15. For 20 institutions it is 20 versus 190. It also gives one legal finality framework, shared cost, and one voice to regulators.
 
-**Where it loses:** technology lock-in to one ledger, governance friction, and the fact that the banks that matter can convene without Concord (which they just did).
+**Where it loses:** technology lock-in to one ledger, governance friction, and the fact that the banks that matter can convene without DepositX (which they just did).
 
-**Board principle I recommend:** *the rulebook and the interfaces are the asset, not the chain.* Concord should be **ledger-neutral by specification** (ISO 20022 messages, a certified interface, portable token-contract templates) and **single-ledger by launch** (one production ledger chosen through a competitive RFI). That preserves interoperability with Canton, Partior, Swift, and Agora-style platforms without the blueprint's "no bridges" absolutism (see Section 4, A-27).
+**Board principle I recommend:** *the rulebook and the interfaces are the asset, not the chain.* DepositX should be **ledger-neutral by specification** (ISO 20022 messages, a certified interface, portable token-contract templates) and **single-ledger by launch** (one production ledger chosen through a competitive RFI). That preserves interoperability with Canton, Partior, Swift, and Agora-style platforms without the blueprint's "no bridges" absolutism (see Section 4, A-27).
 
 ### 1.2 The Big Six question, restated
 
-The blueprint asks how Concord gets the largest banks to join. As of 22 September the question is different, and there are exactly four positions Concord can take:
+The blueprint asks how DepositX gets the largest banks to join. As of 22 September the question is different, and there are exactly four positions DepositX can take:
 
 | Position | Meaning | When it is right | Risk |
 |---|---|---|---|
-| **A. Concord *is* the vehicle** | The six banks adopt Concord's operator, rulebook, and design as their initiative | Working Group members include most of the six and they intend this as the same effort | Perceived as a bank cartel; competition-law and access-fairness scrutiny (Section 3, R6); smaller institutions and fintechs locked out |
-| **B. Concord is the neutral operator/standard the six select** | The six own economics; Concord (or its operator) wins the mandate to run the utility | The six are exploring and have no operator, which matches what was reported | Depends on winning a competitive process; may lose to Payments Canada or a vendor |
-| **C. Concord is the second-tier and interoperability layer** | Six-bank network for the big banks; Concord for Desjardins, credit-union centrals, mid-size and foreign-bank subsidiaries, and non-bank participants, interoperable with the six's rail | The six proceed independently of Concord | Structurally subordinate; the interop price is set by the larger network |
-| **D. Concord is redundant** | Six banks build their own; Concord has no reason to exist | If Working Group has no overlap with the six and they will not engage | Programme should stop and publish learning |
+| **A. DepositX *is* the vehicle** | The six banks adopt DepositX's operator, rulebook, and design as their initiative | Working Group members include most of the six and they intend this as the same effort | Perceived as a bank cartel; competition-law and access-fairness scrutiny (Section 3, R6); smaller institutions and fintechs locked out |
+| **B. DepositX is the neutral operator/standard the six select** | The six own economics; DepositX (or its operator) wins the mandate to run the utility | The six are exploring and have no operator, which matches what was reported | Depends on winning a competitive process; may lose to Payments Canada or a vendor |
+| **C. DepositX is the second-tier and interoperability layer** | Six-bank network for the big banks; DepositX for Desjardins, credit-union centrals, mid-size and foreign-bank subsidiaries, and non-bank participants, interoperable with the six's rail | The six proceed independently of DepositX | Structurally subordinate; the interop price is set by the larger network |
+| **D. DepositX is redundant** | Six banks build their own; DepositX has no reason to exist | If Working Group has no overlap with the six and they will not engage | Programme should stop and publish learning |
 
-**My recommendation:** open outreach *this week* aiming for B, with A as the fallback if the six are already Concord's members, and C as the planned floor. Do not launch anything that positions Concord publicly as a rival to the six's initiative until this is resolved. Two quantified reasons:
+**My recommendation:** open outreach *this week* aiming for B, with A as the fallback if the six are already DepositX's members, and C as the planned floor. Do not launch anything that positions DepositX publicly as a rival to the six's initiative until this is resolved. Two quantified reasons:
 
 - The six will handle the vast majority of Canadian domestic deposits (illustrative shares below). A network without at least 4 of them is not a Canadian settlement network.
 - RBC and TD already worked together on Samara. The two are not each other's strangers. The "RBC joins a network TD governs" problem is really "does any single bank appear to control the utility?"
 
 ### 1.3 "Why would RBC join a network TD also governs?"
 
-RBC will join only if it is better off than its outside option. Its outside options are: (i) the six's own initiative, (ii) its own token plus interoperability, (iii) waiting for Payments Canada/BoC. Concord must therefore beat all three on cost, control, and time. Concretely:
+RBC will join only if it is better off than its outside option. Its outside options are: (i) the six's own initiative, (ii) its own token plus interoperability, (iii) waiting for Payments Canada/BoC. DepositX must therefore beat all three on cost, control, and time. Concretely:
 
 1. **No bank controls the operator.** Recommend: no issuer group holds more than 15% of votes or board seats; an independent chair and two independent directors; issuer-majority to change economics; **two-thirds of issuers by count *and* by value** to change the rulebook's risk provisions; any issuer holds a veto over changes to its own liability treatment.
 2. **The operator is a utility, not a franchise.** Cost-recovery pricing, no dividend, published pricing, a published cap on operator margin. Precedent: Payments Canada's member-governance model. Interac's history with the Competition Bureau (recollection; counsel to verify) is the cautionary tale of a bank-owned network that drew antitrust scrutiny.
@@ -105,14 +105,14 @@ RBC will join only if it is better off than its outside option. Its outside opti
 
 ### 1.4 Competitive and substitute landscape
 
-| Competitor / substitute | Type | Threat to Concord | Concord's honest response |
+| Competitor / substitute | Type | Threat to DepositX | DepositX's honest response |
 |---|---|---|---|
 | **Six-bank initiative (22 Sept)** | Direct, in-market | **Existential**: may bypass or absorb | Position B/A/C per 1.2 |
-| **Lynx** (Payments Canada, BoC-settled, ISO 20022 since Nov 2025) | Incumbent wholesale rail | Extending hours or adding atomic features would remove Concord's 24/7 pitch | Interoperate; never claim to replace |
+| **Lynx** (Payments Canada, BoC-settled, ISO 20022 since Nov 2025) | Incumbent wholesale rail | Extending hours or adding atomic features would remove DepositX's 24/7 pitch | Interoperate; never claim to replace |
 | **Real-Time Rail** (Q4 2026, phased) | Instant 24/7 rail, data-rich payments | High for supplier payments and any "instant" pitch | Do not compete on speed; compete on atomic multi-leg, conditionality, DvP/PvP |
 | **Interac e-Transfer / card rails** | Retail and SMB | Low for wholesale, high for a 2029 retail phase | Drop retail from the plan |
-| **Stablecoins** (Stablecoin Act regime, 2027) | Non-bank issuers | Medium: speed outside the deposit franchise | Concord's answer is bank deposits with the same speed |
-| **Kinexys/JPMD, HSBC TDS, Citi Token Services** | Bank-proprietary tokens | Medium: multinational corporates in Canada already use them for cross-border | Concord should be the CAD leg they interoperate with |
+| **Stablecoins** (Stablecoin Act regime, 2027) | Non-bank issuers | Medium: speed outside the deposit franchise | DepositX's answer is bank deposits with the same speed |
+| **Kinexys/JPMD, HSBC TDS, Citi Token Services** | Bank-proprietary tokens | Medium: multinational corporates in Canada already use them for cross-border | DepositX should be the CAD leg they interoperate with |
 | **Partior, Swift ledger, Canton** | Multi-bank global networks | Medium: could add CAD | Partner as CAD gateway (Path D, Section 5) |
 | **BoC wholesale CAD (Samara lineage), Agora** | Central-bank track | High if the BoC builds it and Payments Canada operates it | Align with it; be the commercial layer above it |
 | **Status quo** | Do nothing | **Most likely competitor** | Discovery must prove the pain exists (Section 2.3) |
@@ -123,36 +123,36 @@ RBC will join only if it is better off than its outside option. Its outside opti
 
 **What I could not verify:** Lynx operating hours, RTR value limits, and RTR's settlement design with the Bank of Canada. Obtain these from Payments Canada in the first 30 days; they change the analysis.
 
-**How Concord can interoperate. There are three modes, and only one is entirely under Concord's control:**
+**How DepositX can interoperate. There are three modes, and only one is entirely under DepositX's control:**
 
 | Mode | Mechanism | Needs from BoC/Payments Canada | Failure exposure |
 |---|---|---|---|
-| **1. Net settlement through Lynx** | Concord net positions are settled at defined intervals via Lynx | Lynx access for a Concord settlement agent; a defined cut-off | Credit exposure between issuers from the last Lynx window to the next (nights and weekends) |
-| **2. Prefunded settlement positions (recommended near-term)** | Each issuer funds a Concord settlement position in central-bank money during Lynx hours. On-ledger transfers draw down and increase positions and can never exceed prefunded amounts | A settlement account or equivalent arrangement at the BoC for a Concord settlement agent; regulatory status for the arrangement | Bounded by prefunding; cost is trapped liquidity (Risk FN2) |
-| **3. Tokenized central-bank reserves on Concord** | Bank of Canada issues wholesale CAD on Concord's ledger (Samara-style) | A BoC policy and possibly legal decision | Lowest risk; **not in Concord's control** |
+| **1. Net settlement through Lynx** | DepositX net positions are settled at defined intervals via Lynx | Lynx access for a DepositX settlement agent; a defined cut-off | Credit exposure between issuers from the last Lynx window to the next (nights and weekends) |
+| **2. Prefunded settlement positions (recommended near-term)** | Each issuer funds a DepositX settlement position in central-bank money during Lynx hours. On-ledger transfers draw down and increase positions and can never exceed prefunded amounts | A settlement account or equivalent arrangement at the BoC for a DepositX settlement agent; regulatory status for the arrangement | Bounded by prefunding; cost is trapped liquidity (Risk FN2) |
+| **3. Tokenized central-bank reserves on DepositX** | Bank of Canada issues wholesale CAD on DepositX's ledger (Samara-style) | A BoC policy and possibly legal decision | Lowest risk; **not in DepositX's control** |
 
 **Design constraint:** architect for Modes 1 and 2 first. Treat Mode 3 as upside. **Do not sell "legal finality" until Mode 2 or 3 is agreed in writing.** Without a settlement asset, an instant token transfer from Bank A to Bank B leaves A owing B. Par between issuers is then only as good as A's credit until the next settlement, which is the exact risk the blueprint says it eliminates. Swift's ledger and Partior both work this way in practice (settlement "the old way" via banks or existing rails), which is why Partior added LSEG DiSH for always-on settlement-bank liquidity.
 
-**Marginalisation risk, stated precisely.** Concord is marginalised if any of the following happens:
+**Marginalisation risk, stated precisely.** DepositX is marginalised if any of the following happens:
 
 1. Payments Canada extends Lynx to near-24/7 operation or launches its own wholesale-token service.
 2. RTR's value limits are high enough to absorb corporate supplier and sweep flows.
 3. The BoC picks the six-bank rail as its settlement counterparty.
 
-**Stress test for every board paper:** "If Lynx were 24/7 and RTR had no value limit, what would remain?" Only atomic multi-party settlement (DvP/PvP), conditional payments, and programmable liquidity remain. **That residue is Concord's real product.** It is a narrower product than "instant payments," which RTR already offers.
+**Stress test for every board paper:** "If Lynx were 24/7 and RTR had no value limit, what would remain?" Only atomic multi-party settlement (DvP/PvP), conditional payments, and programmable liquidity remain. **That residue is DepositX's real product.** It is a narrower product than "instant payments," which RTR already offers.
 
-**Routing principle.** Concord should sit inside bank treasury platforms as a *routing option with automatic fallback* to RTR or Lynx when a counterparty bank is not on Concord. Then "share of eligible flow" becomes a routing statistic, not a network-wide adoption claim.
+**Routing principle.** DepositX should sit inside bank treasury platforms as a *routing option with automatic fallback* to RTR or Lynx when a counterparty bank is not on DepositX. Then "share of eligible flow" becomes a routing statistic, not a network-wide adoption claim.
 
 ### 1.6 Positioning statement
 
-> **Concord is the shared, supervised settlement layer on which Canadian deposit-taking institutions issue and exchange deposit tokens, so that bank money can settle against an asset, a condition, or another bank's deposit in one atomic step, at any hour. It runs alongside Lynx and the Real-Time Rail and routes to them where a counterparty is not on the network.**
+> **DepositX is the shared, supervised settlement layer on which Canadian deposit-taking institutions issue and exchange deposit tokens, so that bank money can settle against an asset, a condition, or another bank's deposit in one atomic step, at any hour. It runs alongside Lynx and the Real-Time Rail and routes to them where a counterparty is not on the network.**
 
 Not for: retail, non-bank issuers, stablecoins, or anything that does not stay a deposit at a regulated institution.
 
 ### 1.7 Five things that must be true
 
 1. **A settlement asset is agreed in writing with the Bank of Canada / Payments Canada** (Mode 2 at minimum) before any live pilot. Without it there is no interbank finality, only a fast messaging layer.
-2. **At least 4 of the six largest banks, including at least 2 of the top 3 by wholesale payments, commit to fund and use Concord**, or the six's initiative adopts Concord's operator/rulebook. Fewer than 4 makes the reachable share of flows too small (Section 2.1).
+2. **At least 4 of the six largest banks, including at least 2 of the top 3 by wholesale payments, commit to fund and use DepositX**, or the six's initiative adopts DepositX's operator/rulebook. Fewer than 4 makes the reachable share of flows too small (Section 2.1).
 3. **Statutory or equivalent legal finality exists before production.** In practice: designation and oversight under the Payment Clearing and Settlement Act (my recollection; counsel to confirm the exact route), plus insolvency-protection opinions from two independent firms.
 4. **One anchor use case delivers measurable value that Lynx plus RTR cannot**, evidenced by signed customer commitments, not hypotheses. Target thresholds are in Sections 2.3 and 5.
 5. **Bank-side integration is affordable and scheduled.** Each founding bank has an approved integration budget and date. Blueprint has none.
@@ -165,7 +165,7 @@ Not for: retail, non-bank issuers, stablecoins, or anything that does not stay a
 
 For a *random* corporate payment, the chance both banks are on the network is (share of participating banks)². Using illustrative shares (an assumption, not sourced): RBC 25%, TD 22%, BMO 14%, BNS 14%, CIBC 12%, NBC 5%, others 8%.
 
-| Participating banks | Combined share | Share of random cross-bank payments with both banks on Concord |
+| Participating banks | Combined share | Share of random cross-bank payments with both banks on DepositX |
 |---|---|---|
 | RBC + TD | 47% | **22%** |
 | Top 3 | 61% | **37%** |
@@ -233,19 +233,19 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 - **Design partners (Waves 1-2):** no network fee to clients. Costs are shared by founding issuers per the cost-sharing key (Section 7, decision D6).
 - **Network fee at production (hypothesis to test):** a per-instruction charge to issuers in the range **C$0.10-0.50** for standard transfers, and **0.05-0.25 bp of notional** for DvP, plus a participation fee by tier (e.g., C$0.5-3M per year per issuer). Banks choose their client price; the target is parity with current wire fees or below, not a premium.
 - **Break-even check.** Blueprint's operator run team is 40-60 people. At about C$250k fully loaded per head plus infrastructure, security, audit, insurance and legal, steady-state run cost is roughly **C$30-40M per year** (my estimate). At C$0.25 per instruction, break-even is about 120-160 million instructions a year (about 330-440k a day). That is roughly 4-5 tps on average and about one-thousandth of the 5,000 tps the blueprint sizes for. **Pricing is not the constraint; the anchor use case volume is.** If discovery cannot identify hundreds of thousands of instructions a day (or notional-based equivalents), the operator model must shrink (Path A, Section 5).
-- **No profit motive.** Treat Concord as a cost-recovery utility with a published margin cap. That answers the "why join a network another bank governs" question (1.3) and the antitrust question (R6).
+- **No profit motive.** Treat DepositX as a cost-recovery utility with a published margin cap. That answers the "why join a network another bank governs" question (1.3) and the antitrust question (R6).
 
 ---
 
 ## 3. Enterprise risk register
 
-**Scoring:** Likelihood (L) and Impact (I) each 1-5. Score = L × I. Likelihood is over the plan's life to Gate 3. Impact 5 means threatens Concord's existence or causes systemic harm. Owners are roles (see Section 7 for the role list). EWI = early-warning indicator.
+**Scoring:** Likelihood (L) and Impact (I) each 1-5. Score = L × I. Likelihood is over the plan's life to Gate 3. Impact 5 means threatens DepositX's existence or causes systemic harm. Owners are roles (see Section 7 for the role list). EWI = early-warning indicator.
 
 ### 3.1 Register
 
 | ID | Cat. | Risk | L | I | Score | Owner | Early-warning indicator | Mitigation |
 |---|---|---|---|---|---|---|---|---|
-| S1 | Strategic | Six-bank initiative bypasses or absorbs Concord | 4 | 5 | **20** | Chair / CSO | No reply to outreach in 10 days; six announce vendor/governance without Concord | Position B/A/C (1.2); outreach this week; regulators told Concord is the neutral option |
+| S1 | Strategic | Six-bank initiative bypasses or absorbs DepositX | 4 | 5 | **20** | Chair / CSO | No reply to outreach in 10 days; six announce vendor/governance without DepositX | Position B/A/C (1.2); outreach this week; regulators told DepositX is the neutral option |
 | S2 | Strategic | Governance deadlock, or one bank seen to dominate | 4 | 5 | **20** | Chair | Repeated no-decision board meetings; first vote splits on economics | Vote caps, independent chair and directors, two-thirds by count and value on risk rules, deadlock-breaker (expert determination) |
 | S3 | Strategic | No anchor use case beats Lynx plus RTR | 3 | 5 | 15 | CSO / Head of Product | Fewer than 8 LOIs by day 90; H7 shows RTR covers 80%+ | Discovery (2.3); Path A/B fallback; drop generic "instant payments" pitch |
 | S4 | Strategic | Partial participation; no network effect | 4 | 4 | 16 | CSO | Fewer than 4 banks committed by G0 | Wedge that needs no counterparty (2.1); routing with fallback |
@@ -302,7 +302,7 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 ### 3.3 The top-5 existential risks (pre-launch killers)
 
 1. **R1: no settlement asset.** Without central-bank-money settlement of interbank positions, there is no legal finality and no interbank par. Prerequisite for everything else. Owner: Head of Regulatory Affairs, sponsored by the Chair.
-2. **S1: six-bank bypass or absorption.** Concord can be right and irrelevant. Owner: Chair and CSO.
+2. **S1: six-bank bypass or absorption.** DepositX can be right and irrelevant. Owner: Chair and CSO.
 3. **S2: governance deadlock or dominance.** Known to the KPMG draft as "High"; correctly so. Fix the vote structure before naming an operator.
 4. **R2: legal finality and insolvency protection not established.** Invariant II is unsupported until it is.
 5. **S3: no anchor use case that Lynx plus RTR cannot serve.** If discovery fails, everything technical was wasted.
@@ -327,7 +327,7 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 | A-8 | Treasurers want sub-2s, 24/7 sweeps and supplier payments on goods scan | **Unsupported** | No customer evidence; RTR overlaps supplier payments | Discovery (2.3); treat as hypotheses |
 | A-9 | Supervisory position query under 60 seconds from read-node | **Plausible** | Easy for on-ledger data; entity-level roll-ups depend on issuer data | "On-ledger positions per issuer under 60 seconds; entity-level roll-up in 15 minutes." Demonstrate in unscripted tests |
 | A-10 | Non-goal: not displacing Lynx/RTR | **Sound** | But the 95% north star contradicts it | Keep; delete the 95% target |
-| A-11 | North star: at least 95% of eligible wholesale interbank flow settle-able on Concord by end of Phase 3 | **Doubtful** | "Eligible" is undefined; "settle-able" is a capacity claim not a usage claim; needs all banks; Samara found adoption slow | By use case: e.g., "at least 30% of participating banks' cross-bank own-account transfers and 100% of pilot-scope DvP cash legs run through Concord by Gate 3", plus a published definition of eligible |
+| A-11 | North star: at least 95% of eligible wholesale interbank flow settle-able on DepositX by end of Phase 3 | **Doubtful** | "Eligible" is undefined; "settle-able" is a capacity claim not a usage claim; needs all banks; Samara found adoption slow | By use case: e.g., "at least 30% of participating banks' cross-bank own-account transfers and 100% of pilot-scope DvP cash legs run through DepositX by Gate 3", plus a published definition of eligible |
 | A-12 | Finality under 2s median, under 5s p99 (instruction accepted to consensus final) | **Plausible** | Achievable for consensus within Canada (short regional distances). It excludes screening, ZK proving, and core posting | Two SLOs: network (consensus) p99 under 2s at 250 tps; end-to-end initiate-to-credit p95 under 10s including bank side |
 | A-13 | Sub-2s finality "across regions" | **Plausible** | Canadian regions are close; measure, do not assume | Test in Phase 1 with realistic fault injection |
 | A-14 | 99.999% availability, 24/7/365, no maintenance windows | **Doubtful** | About 5 minutes a year. Bank cores have batch windows; a multi-party network's availability is the product of its parts. The exit cannot be measured inside the phase (Known issue 2) | 99.95% network availability over 90 days at pilot exit; 99.99% by Gate 3; bank-side availability reported separately; rolling upgrades |
@@ -367,7 +367,7 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 - **Gate Committee:** the independent chair (chairs, casts a deciding vote only on ties), two independent directors (one with risk/regulatory background), and one senior executive per founding issuer. BoC, OSFI, FINTRAC and CDIC are **invited non-voting observers**. Their non-objection is an input, not a vote.
 - **Decision rule:** GO requires two-thirds of founding issuers by count *and* by share of committed funding, *and* CRO independent assurance sign-off. NO-GO requires only a majority. PIVOT requires a simple majority.
 - **Independence:** the CRO reports to the independent directors on gate evidence.
-- **Standing kill triggers (any time):** a loss of client money attributable to Concord; a regulator's written objection; withdrawal of funding commitments below 100% of the next phase.
+- **Standing kill triggers (any time):** a loss of client money attributable to DepositX; a regulator's written objection; withdrawal of funding commitments below 100% of the next phase.
 
 ### 5.2 Gates
 
@@ -384,9 +384,9 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 | Path | What it is | Trigger | Size and effect |
 |---|---|---|---|
 | **A. Wholesale single-use-case network** | Bank-to-bank/dealer cash-leg DvP (Samara lineage) and interbank weekend liquidity, 3 banks, no corporate access, permissioned-privacy fallback instead of ZK | G1 or G2 stumble on settlement/timeline; discovery shows only wholesale demand | Run team 15-20; cost about 30-40% of base; production about 2 quarters after G2 |
-| **B. Standard and certification body** | Concord publishes the rulebook, interface spec, and certification suite; runs no production ledger; the six's initiative or a vendor operates | Six banks proceed without an operator role for Concord | Team about 10-15; keeps the standard-setting asset and ISO 20022 discipline |
-| **C. Second-tier network and interoperability layer** | Concord serves institutions the six's rail does not (credit union centrals, Desjardins, mid-size and foreign-bank subsidiaries, other regulated deposit-takers), interoperable with the six | Six proceed and are open in principle | Smaller economics; realistic if access rules are fair |
-| **D. CAD gateway to global networks** | Concord's CAD deposit tokens are made available on Canton, Swift ledger, or Kinexys | Domestic demand fails but cross-border demand exists | Requires BoC/legal work on cross-ledger finality |
+| **B. Standard and certification body** | DepositX publishes the rulebook, interface spec, and certification suite; runs no production ledger; the six's initiative or a vendor operates | Six banks proceed without an operator role for DepositX | Team about 10-15; keeps the standard-setting asset and ISO 20022 discipline |
+| **C. Second-tier network and interoperability layer** | DepositX serves institutions the six's rail does not (credit union centrals, Desjardins, mid-size and foreign-bank subsidiaries, other regulated deposit-takers), interoperable with the six | Six proceed and are open in principle | Smaller economics; realistic if access rules are fair |
+| **D. CAD gateway to global networks** | DepositX's CAD deposit tokens are made available on Canton, Swift ledger, or Kinexys | Domestic demand fails but cross-border demand exists | Requires BoC/legal work on cross-ledger finality |
 | **E. Sunset** | Wind down; publish learning, specifications, and test artefacts | Two consecutive gate failures or standing kill trigger | Budget a wind-down reserve (about 3 months of run cost) from the start |
 
 ---
@@ -395,12 +395,12 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 
 ### 6.1 Metrics beyond the blueprint's north stars
 
-The north stars (zero par breaks, finality, 95% flow, 60-second query) do not show whether Concord is *useful* or *safe to scale*. Track these, with definitions published and audited.
+The north stars (zero par breaks, finality, 95% flow, 60-second query) do not show whether DepositX is *useful* or *safe to scale*. Track these, with definitions published and audited.
 
 | Domain | Metric | Target at G2 / G3 |
 |---|---|---|
 | **Adoption** | Live issuers; live clients; active clients in the last 8 weeks; value settled by use case | 3 / 4+ issuers; 15+ clients; 80%+ active |
-| **Liquidity** | Share of participating banks' eligible cross-bank flow via Concord (defined per use case); routing fallback rate to RTR/Lynx | 10%+ at G3 |
+| **Liquidity** | Share of participating banks' eligible cross-bank flow via DepositX (defined per use case); routing fallback rate to RTR/Lynx | 10%+ at G3 |
 | **Concentration** | Share of volume from the top issuer; Herfindahl index of participants | Top issuer under 40% |
 | **Integrity** | Unreconciled supply minutes; time to detect and clear exceptions; reconciliation coverage | Zero over 15 minutes; detect under 5 minutes |
 | **Reliability** | Network availability (rolling 90 days); end-to-end p95; consensus p99; DR drill success | 99.95% / 99.99%; p95 under 10s |
@@ -503,7 +503,7 @@ The brand rule says to be cited. The blueprint's own recommended sentence ("sett
 
 ### 7.5 What "good" looks like at day 90
 
-- Written position from the six banks on how Concord relates to them.
+- Written position from the six banks on how DepositX relates to them.
 - A regulator response on the settlement asset, even if provisional.
 - 60 interviews, 8+ corporate and 3+ dealer LOIs.
 - Bottom-up cost model and funding commitments.

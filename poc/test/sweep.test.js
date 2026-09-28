@@ -11,7 +11,7 @@ import { Network, dollars } from '../src/network.js';
 const bal = (n, acct) => n.ledger.s.accounts.get(acct).balance;
 const inv = (n) => n.ledger.checkInvariants(n.ledger.s.time);
 const allOk = (n) => assert.deepEqual(inv(n).violations, [], 'no invariant violations');
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'concord-'));
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'depositx-'));
 
 test('sweep: registering where the source already exceeds keepAmount fires immediately, at that block\'s end', () => {
   const n = new Network();

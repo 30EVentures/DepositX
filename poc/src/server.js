@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, '..', 'public');
 const PORT = Number(process.env.PORT) || 8787;
 
-const DATA = process.env.CONCORD_DATA || null; // set to a directory to make the demo durable
+const DATA = process.env.DEPOSITX_DATA || null; // set to a directory to make the demo durable
 let net = new Network({ dataDir: DATA });
 const clients = new Set();
 const push = () => {
@@ -152,4 +152,4 @@ http
       json(res, 500, { ok: false, error: 'SERVER_ERROR', message: e.message });
     }
   })
-  .listen(PORT, '127.0.0.1', () => console.log(`Concord PoC running at http://127.0.0.1:${PORT}` + (DATA ? ` (durable: ${DATA}, ${net.recovered ? 'recovered ' + net.recovered.blocks + ' blocks' : 'new'})` : ' (in memory)')));
+  .listen(PORT, '127.0.0.1', () => console.log(`DepositX PoC running at http://127.0.0.1:${PORT}` + (DATA ? ` (durable: ${DATA}, ${net.recovered ? 'recovered ' + net.recovered.blocks + ' blocks' : 'new'})` : ' (in memory)')));

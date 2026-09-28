@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Network, dollars } from '../src/network.js';
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'concord-'));
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'depositx-'));
 
 test('crash recovery: reopening the data directory restores ledger, banks and clock exactly', () => {
   const dir = tmp();

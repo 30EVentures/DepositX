@@ -1,4 +1,4 @@
-# Concord Network — Execution Roadmap
+# DepositX Network — Execution Roadmap
 
 **Status:** Proposed plan of record, for ratification. Supersedes the v0.9 roadmap once adopted.
 **Date:** 25 September 2026 · **Basis:** six seat memos; reconciliation choices are explained in `00-board-resolutions.md` §3 (C1–C11).
@@ -69,7 +69,7 @@ Three chains are within one to two months of critical: regulatory (not ours to c
 - **Money:** Phase 0 funding commitments signed; first tranche **$12.9M** at term sheet (equal shares, about $2.15M each).
 - **18 Dec board:** approve or amend this plan; confirm Phase 0 to 31 Mar 2027; choose anchor-use-case and vendor shortlist.
 
-**Good looks like at day 90:** written position from the six banks on how Concord relates; a regulator response on the settlement asset (even provisional); 60 interviews and LOIs in hand; bottom-up cost model with funding commitments; chair search live and operator form chosen; claims register and freeze in force. **If two or more are missing, the CRO must tell the independent directors G0 is at risk and the board should pick a scope-down path before spending Phase 1 money** (`04` §2).
+**Good looks like at day 90:** written position from the six banks on how DepositX relates; a regulator response on the settlement asset (even provisional); 60 interviews and LOIs in hand; bottom-up cost model with funding commitments; chair search live and operator form chosen; claims register and freeze in force. **If two or more are missing, the CRO must tell the independent directors G0 is at risk and the board should pick a scope-down path before spending Phase 1 money** (`04` §2).
 
 ### 3.3 Phase 0b exit (G0, 31 Mar 2027)
 

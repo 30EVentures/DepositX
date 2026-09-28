@@ -1,6 +1,6 @@
-# Concord Network — Execution Pack
+# DepositX Network — Execution Pack
 
-Board-reviewed roadmap and technical implementation for the Concord tokenized-deposit settlement network (Canada), built from the KPMG Blueprint v0.9 (2 Sep 2026).
+Board-reviewed roadmap and technical implementation for the DepositX tokenized-deposit settlement network (Canada), built from the KPMG Blueprint v0.9 (2 Sep 2026).
 
 **Status: proposed, not ratified.** Six AI-simulated board seats reviewed the blueprint; `00` records where they agreed, where they disagreed, and how the disagreement was resolved. Legal, regulatory, accounting and financial content is a workplan for real counsel and real bank executives to validate, not advice. Unverified facts are marked **[V]**.
 
@@ -19,7 +19,7 @@ Board-reviewed roadmap and technical implementation for the Concord tokenized-de
 [poc/](poc/README.md) is a working model of the ledger kernel: atomic cross-bank settlement, DvP, Escrow, PayOnEvent, Batch and Standing/Sweep (the spec's full launch-set templates, §2.5), netting, the P1–P7 invariants and the graded halt, with a live dashboard, durable crash-safe storage, an ISO 20022 gateway and an explicit-state model checker. 60 tests. See [poc/docs/invariant-charter.md](poc/docs/invariant-charter.md).
 
 ```
-cd ~/Concord/poc && npm test && npm start     # http://127.0.0.1:8787
+cd ~/DepositX/poc && npm test && npm start     # http://127.0.0.1:8787
 ```
 
 ## Source material
@@ -29,7 +29,7 @@ cd ~/Concord/poc && npm test && npm start     # http://127.0.0.1:8787
 
 ## The five things to know
 
-1. **22 Sep 2026: the six largest banks announced their own CAD tokenized-deposit exploration.** Decide by 9 Oct whether Concord is that initiative's neutral operator, its second-tier complement, or something else.
+1. **22 Sep 2026: the six largest banks announced their own CAD tokenized-deposit exploration.** Decide by 9 Oct whether DepositX is that initiative's neutral operator, its second-tier complement, or something else.
 2. **The settlement asset is the biggest hole.** Without a written Bank of Canada / Payments Canada arrangement there is no interbank finality or par.
 3. **Legal finality and par are goals to be earned, not claims to be made.** Do not use "settles in under two seconds with legal finality" externally yet.
 4. **Production moves from H2 2028 to 30 Nov 2029 (plan), Nov 2030 (commit).** Regulators and bank onboarding are the critical path, not the technology.

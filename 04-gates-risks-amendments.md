@@ -1,4 +1,4 @@
-# Concord Network — Gates, Risks and Blueprint Amendments
+# DepositX Network — Gates, Risks and Blueprint Amendments
 
 **Status:** Proposed for ratification. Sources: `board/strategy-risk-challenge.md` (gates, register, red-team, claims), `board/cfo-coo-programme-and-economics.md` §7 (kill/pivot, KPIs), `board/legal-regulatory.md` §8 (risks). Gate dates are aligned to the master schedule in `01`, so they differ slightly from the individual memos (noted in §1).
 
@@ -26,7 +26,7 @@
 | Path | What it is | Trigger | Effect |
 |---|---|---|---|
 | **A. Wholesale single-use-case network** | Bank/dealer cash-leg DvP (Samara lineage) and interbank weekend liquidity; 3 banks; no corporate access; permissioned-privacy fallback; no netting at go-live | G1 or G2 stumble on settlement or timeline; discovery shows only wholesale demand | Run team 15–20; cost ~30–40% of base; production ~2 quarters after G2 |
-| **B. Standard and certification body** | Concord publishes the rulebook, interface spec and certification suite; runs no production ledger; the six banks' initiative or a vendor operates | The six proceed without an operator role for Concord | Team ~10–15; keeps the standard-setting asset |
+| **B. Standard and certification body** | DepositX publishes the rulebook, interface spec and certification suite; runs no production ledger; the six banks' initiative or a vendor operates | The six proceed without an operator role for DepositX | Team ~10–15; keeps the standard-setting asset |
 | **C. Second-tier network and interoperability layer** | Serves institutions the six's rail does not (credit-union centrals, Desjardins, mid-size and foreign subsidiaries), interoperable with the six | The six proceed and are open in principle | Smaller economics; realistic if access rules are fair |
 | **D. CAD gateway to global networks** | CAD deposit tokens made available on Canton, Swift ledger or Kinexys | Domestic demand fails but cross-border demand exists | Needs BoC/legal work on cross-ledger finality |
 | **E. Sunset** | Wind down; publish learning, specifications and test artefacts | Two consecutive gate failures or a standing kill trigger | Budget a wind-down reserve (~3 months of run cost) from the start |
@@ -49,7 +49,7 @@ CFO's **pivots**: P1 lean operator (~60 FTE, outsourced 24/7 NOC, ~$39M/yr run c
 | K8 | The Bank of Canada declines an observer and settlement-anchor role | G0-R | Pivot P2 |
 | K9 | Any par break in pilot or production; or a critical audit finding unremediated after 90 days | Any time | Halt issuance and redemption; independent review; resume only by reserved-matter vote |
 | K10 | An overlapping national rail delivers the same capability with regulator preference | Any time | Pivot P3 |
-| K11 | A loss of client money attributable to Concord; withdrawal of funding below 100% of the next phase | Any time | Standing kill triggers (Strategy) |
+| K11 | A loss of client money attributable to DepositX; withdrawal of funding below 100% of the next phase | Any time | Standing kill triggers (Strategy) |
 
 ## 4. Risk register (top of 41; full register in `board/strategy-risk-challenge.md` §3)
 
@@ -60,7 +60,7 @@ CFO's **pivots**: P1 lean operator (~60 FTE, outsourced 24/7 NOC, ~$39M/yr run c
 | ID | Risk | L×I | Owner | Early warning | Mitigation |
 |---|---|---|---|---|---|
 | **R1** | **Settlement asset unresolved**: no BoC/Payments Canada arrangement, so no interbank finality or par | 4×5 | Head of Regulatory Affairs, sponsored by Chair | No written BoC position by G0 | Prefunded-position proposal; joint working group; **do not go live without it** |
-| **S1** | **Six-bank initiative bypasses or absorbs Concord** | 4×5 | Chair / CSO | No reply to outreach in 10 days; the six name a vendor or governance without Concord | D1 by 9 Oct; outreach now; tell regulators Concord is the neutral option |
+| **S1** | **Six-bank initiative bypasses or absorbs DepositX** | 4×5 | Chair / CSO | No reply to outreach in 10 days; the six name a vendor or governance without DepositX | D1 by 9 Oct; outreach now; tell regulators DepositX is the neutral option |
 | **S2** | **Governance deadlock or dominance** | 4×5 | Chair | Repeated no-decision meetings; first economic vote splits | Vote caps, independent chair and directors, two-thirds by count and value, expert determination, safety-first default |
 | **R2** | **No legal finality or insolvency protection**; PCSA designation timing | 3×5 | General Counsel | Counsel cannot opine without qualification | Dual track (rulebook + opinions for the pilot; designation dossier filed Q3 2027–Q1 2028); no "legal finality" claim until confirmed |
 | **S3** | **No anchor use case that Lynx + RTR cannot serve** | 3×5 | CSO / Head of Product | <8 LOIs by day 90; RTR covers 80%+ of hypothesised flow | Discovery; Path A/B; drop the generic "instant payments" pitch |
@@ -104,7 +104,7 @@ CFO's **pivots**: P1 lean operator (~60 FTE, outsourced 24/7 NOC, ~$39M/yr run c
 |---|---|---|
 | Zero par breaks and zero client-money loss events, cumulative, for the life of the network | **Doubtful** as absolute | "0 par exceptions in N settled instructions over D days, as of [date]" with a published definition (any credit or redemption not 1:1 to the issuer's liability, or unreconciled supply over tolerance for more than 15 minutes); upper bound reported (3/N at 95% confidence). Client-money loss: standing kill trigger |
 | Finality <2 s median, <5 s p99 | **Plausible** but only measures consensus | Two SLOs: consensus p99 <2 s at design load; end-to-end initiate-to-credit p95 <10 s including bank side |
-| ≥95% of eligible wholesale flow settle-able on Concord by end Phase 3 | **Doubtful** ("eligible" undefined; capacity, not usage) | By use case: e.g. ≥30% of participating banks' cross-bank own-account transfers and 100% of pilot-scope DvP cash legs on Concord by G3b, with a published definition of eligible. (The CTO's capability test "≥95% settle-able" remains a Phase 3 engineering exit, not a north star.) |
+| ≥95% of eligible wholesale flow settle-able on DepositX by end Phase 3 | **Doubtful** ("eligible" undefined; capacity, not usage) | By use case: e.g. ≥30% of participating banks' cross-bank own-account transfers and 100% of pilot-scope DvP cash legs on DepositX by G3b, with a published definition of eligible. (The CTO's capability test "≥95% settle-able" remains a Phase 3 engineering exit, not a north star.) |
 | Supervisory query <60 s | **Plausible** for on-ledger | On-ledger positions <60 s; entity-level roll-up in 15 min; demonstrated in unscripted tests |
 
 ## 7. Claims discipline (effective now)

@@ -1,4 +1,4 @@
-# Concord Network: Bank Onboarding & Integration Playbook
+# DepositX Network: Bank Onboarding & Integration Playbook
 
 **Seat:** Head of Bank Onboarding & Integration
 **To:** Founding board
@@ -10,7 +10,7 @@
 
 ## 0. The position in one page
 
-The blueprint's own known-issues list is right: onboarding large banks is the board's central job, and it is the critical path of the whole programme. The technology can be finished on schedule and Concord still misses H2 2028 if banks are not integrated, approved and certified in time.
+The blueprint's own known-issues list is right: onboarding large banks is the board's central job, and it is the critical path of the whole programme. The technology can be finished on schedule and DepositX still misses H2 2028 if banks are not integrated, approved and certified in time.
 
 **The arithmetic.** A Big-Six-scale bank takes 24-30 months from first engagement to production the first time, and 18-22 months once a due-diligence pack and certified adapter exist. Blueprint Phase 3 (H2 2028) says "all founding issuers live". Working backwards, **any founding issuer that has not started Assess by end of Q1 2027 cannot be production-live in H2 2028.** The founding cohort must therefore commit in Phase 0 (Q4 2026), before there is much to show them.
 
@@ -18,10 +18,10 @@ The blueprint's own known-issues list is right: onboarding large banks is the bo
 
 1. **Two-speed integration.** Every bank builds a *Thin Pilot Profile* (about 40% of build effort, live in 9-12 months, capped value, some manual reconciliation) first, then a *Full Production Profile* (straight-through, 24/7). This is how Phase 2 (H2 2027) gets multi-issuer live at all.
 2. **Bank Due-Diligence Pack (BDDP).** Build it once, publish it in a Trust Centre, and let each bank's 10-12 internal approval functions pull from it in parallel. Target: bank internal approval 5-8 months instead of 12-18 for a Tier A bank.
-3. **Staged, conditional internal approvals** (Approve-to-Build, Approve-to-Pilot, Approve-to-Produce) matched to the evidence Concord can actually produce at each date. SOC 2 Type I, formal-verification proofs and audit exist only in Phase 2; banks must not be asked for them in 2026.
+3. **Staged, conditional internal approvals** (Approve-to-Build, Approve-to-Pilot, Approve-to-Produce) matched to the evidence DepositX can actually produce at each date. SOC 2 Type I, formal-verification proofs and audit exist only in Phase 2; banks must not be asked for them in 2026.
 4. **Deployment options as a menu, with one fixed rule:** the issuer always owns its validator identity and signing keys (HSM-resident, issuer-controlled), whoever runs the hardware. Tier A defaults to bank-operated; Tier B/C default to certified node-as-a-service.
-5. **Certification Programme with three badges** (Sandbox-Ready, Pilot-Certified, Production-Certified), 12-month validity, version-bound, with a mandatory par-break drill and three-way reconciliation soak. A Concord-run "Bot Bank" counterparty removes dependence on other banks being ready.
-6. **Release train and skew policy** built for a 24/7 network with 6+ change calendars: quarterly minors, annual major, N and N-1 supported, activation by governance-set height only when all voting validators report ready, pre-approved "standard change" status for Concord patches in each bank's ITSM.
+5. **Certification Programme with three badges** (Sandbox-Ready, Pilot-Certified, Production-Certified), 12-month validity, version-bound, with a mandatory par-break drill and three-way reconciliation soak. A DepositX-run "Bot Bank" counterparty removes dependence on other banks being ready.
+6. **Release train and skew policy** built for a 24/7 network with 6+ change calendars: quarterly minors, annual major, N and N-1 supported, activation by governance-set height only when all voting validators report ready, pre-approved "standard change" status for DepositX patches in each bank's ITSM.
 7. **Lanes, not lockstep.** Every bank has its own lane and stage clock. Network phase exits are defined on quorum ("at least N live"), never on "all". No bank has a veto over another's slot, and no slow bank blocks the network.
 8. **Realistic sizing.** ROM bank-side effort to production: Tier A ~450 person-months (PM), Tier B ~180, Tier C ~60. Six Tier A banks alone average ~120 FTE and peak near 180 FTE, against the blueprint's 120-160 "across all participants". **Bank-side integration cost (~CAD 85-135M for six Tier A banks) may equal the entire "9 figures" programme figure; the board must decide whether it is inside or outside it.**
 9. **Use-case ladder:** (1) 24/7 cross-bank treasury sweeps, (2) corporate 24/7 conditional B2B payments, (3) tokenized-bond DvP cash leg; repo intraday liquidity is rung 4. Each rung is measured against a pre-registered baseline so every bank gets a business case that does not depend on other banks being live.
@@ -52,9 +52,9 @@ The blueprint's own known-issues list is right: onboarding large banks is the bo
   - A binding *go-live covenant* in the Membership Agreement: pilot-live and production-live dates with an agreed slip allowance (see 5.3).
   - Its programme funding share.
   - A validator run to published SLOs.
-  - Continuous supply-to-liabilities integrity, with the issuer, not Concord, accountable for backing.
+  - Continuous supply-to-liabilities integrity, with the issuer, not DepositX, accountable for backing.
   - Certification currency.
-  - Two senior secondees (architecture and operations) to Concord pods, plus named SMEs in each of the 10-12 functions in 2.3.
+  - Two senior secondees (architecture and operations) to DepositX pods, plus named SMEs in each of the 10-12 functions in 2.3.
   - Hosting of regulator drills, and participation in the Network Change Advisory Board (NCAB) and councils.
 - Eligibility: any D-SIB automatically; any other OSFI-regulated deposit-taking institution by invitation of the founders. Provincially regulated institutions such as Desjardins need their prudential regulator engaged in parallel `[V12]`. Cohort closes at signature of the Operator shareholders' agreement (target end of Q1 2027) and is capped at 8 voting issuers to protect BFT performance `[V15]`.
 - Commercial: see 1.3.
@@ -70,7 +70,7 @@ The blueprint's own known-issues list is right: onboarding large banks is the bo
   - Passes a capacity test: network headroom and onboarding slot available (5.4).
 
 **Non-issuing Participant / Agent Bank**
-- Can: hold other issuers' tokens as principal; originate and receive transfers; act as cash-leg counterparty in DvP; use tokens as a liquidity instrument. An **Agent Bank** is an NIP that also offers Concord-settled payment services to its own clients (indirect participation). Its clients do not hold tokens; the agent books their accounts in its own core and settles in tokens it holds as principal. This preserves Invariant III because tokens are only ever claims on the issuing bank, and the agent does not become an issuer or custodian of client tokens.
+- Can: hold other issuers' tokens as principal; originate and receive transfers; act as cash-leg counterparty in DvP; use tokens as a liquidity instrument. An **Agent Bank** is an NIP that also offers DepositX-settled payment services to its own clients (indirect participation). Its clients do not hold tokens; the agent books their accounts in its own core and settles in tokens it holds as principal. This preserves Invariant III because tokens are only ever claims on the issuing bank, and the agent does not become an issuer or custodian of client tokens.
 - Owes: Participant Gateway certification, own-key custody to certified standard (or a sponsor issuer's hosted wallet), sanctions and KYC responsibility for its clients, indirect-participant caps set by the rulebook, incident reporting.
 - Eligibility: regulated financial institution. Agent Bank status is available from Phase 3 only, with a cap on indirect participants per agent until concentration ("tiering") risk is measured.
 - Rulebook question for Legal: the blueprint says "bank-hosted wallets". Self-custody by an NIP extends this to non-issuing regulated firms and needs an explicit rulebook clause `[V11]`.
@@ -81,7 +81,7 @@ The blueprint's own known-issues list is right: onboarding large banks is the bo
 - Design rule: the regulator track works whether or not the Bank of Canada ends up as a validator-observer. Onboarding supports read-only, non-voting and voting variants `[V1]`.
 
 **Technology Partner**
-- TP-1 *Certified Connector Vendor*: core-banking, payments-hub, GL, treasury and reconciliation vendors who ship a Concord connector.
+- TP-1 *Certified Connector Vendor*: core-banking, payments-hub, GL, treasury and reconciliation vendors who ship a DepositX connector.
 - TP-2 *Certified Integrator*: systems integrators with named, trained engineers.
 - TP-3 *Certified Service Provider*: node-as-a-service operators and hosted-custody providers. These become material third parties for each bank they serve.
 - TP-4 *Approved Component*: HSMs, network and monitoring components on the Approved Component List.
@@ -102,7 +102,7 @@ The blueprint has no funding or revenue model (known issue). I do not own that m
 
 Principles I would hold to: cost-recovery operator (no profit motive that competes with members); same tier, same price (no side letters); schedule published in the rulebook; no volume lock-in and no exclusivity; termination and exit plan compliant with OSFI B-10 expectations (bank can exit, retains a verifiable copy of its own ledger state, and can run its validator standalone) `[V9]`.
 
-**Indicative onboarding fee** (equals Concord-side effort at ~CAD 25k per PM; see 3.7): Tier A late joiner about CAD 2.5M; Tier B about CAD 1.1M; Tier C about CAD 0.5M. Pack reuse should push these 20-30% lower once the pack is amortised. Service-level remedies (credits capped as a share of annual fees, plus termination for chronic failure) will be demanded by bank TPRM and should be in the standard Membership Agreement, not negotiated per bank `[V10]`.
+**Indicative onboarding fee** (equals DepositX-side effort at ~CAD 25k per PM; see 3.7): Tier A late joiner about CAD 2.5M; Tier B about CAD 1.1M; Tier C about CAD 0.5M. Pack reuse should push these 20-30% lower once the pack is amortised. Service-level remedies (credits capped as a share of annual fees, plus termination for chronic failure) will be demanded by bank TPRM and should be in the standard Membership Agreement, not negotiated per bank `[V10]`.
 
 ---
 
@@ -110,9 +110,9 @@ Principles I would hold to: cost-recovery operator (no profit motive that compet
 
 ### 2.1 Stages and gates
 
-Eight stages, seven gates. Each stage has a Concord owner and a bank owner. Gates are decided by a **Gate Review Board** made of the Concord Head of Onboarding (chair), Head of Assurance, Head of Legal/Regulatory, and one *rotating* member from another issuing bank's operations or risk function. A bank never sits on its own gate. Every gate decision is written with evidence references. Gate decisions can be *pass*, *pass with conditions subsequent* (dated, owned) or *hold*.
+Eight stages, seven gates. Each stage has a DepositX owner and a bank owner. Gates are decided by a **Gate Review Board** made of the DepositX Head of Onboarding (chair), Head of Assurance, Head of Legal/Regulatory, and one *rotating* member from another issuing bank's operations or risk function. A bank never sits on its own gate. Every gate decision is written with evidence references. Gate decisions can be *pass*, *pass with conditions subsequent* (dated, owned) or *hold*.
 
-| # | Stage | Gate to exit | Concord owner | Bank owner |
+| # | Stage | Gate to exit | DepositX owner | Bank owner |
 |---|---|---|---|---|
 | S1 | Engage | G1 Sponsor Commitment | Bank Relationship Lead (BRL) | Executive Sponsor (EVP, Payments/Global Transaction Banking or Treasury) |
 | S2 | Assess | G2 Assessment Pass | Solution Architect + Due-Diligence Lead | Programme Director + Enterprise Architect + TPRM lead |
@@ -133,8 +133,8 @@ Eight stages, seven gates. Each stage has a Concord owner and a bank owner. Gate
 
 **S2 Assess**
 - Entry: G1.
-- Activities: the bank works its 10-12 internal approval functions in *parallel* using the Bank Due-Diligence Pack (2.3-2.4); joint architecture sessions; joint threat-model review; regulatory pre-briefing to the bank's OSFI relationship manager (Concord attends only if the bank asks); integration discovery against the bank's core, payments hub, GL and treasury.
-- Exit (G2): *Approve-to-Build* from the bank's architecture review and NIAP-equivalent new-initiative committee; TPRM classification of Concord as a material third party completed with residual risks accepted; InfoSec design approval; legal position on Membership Agreement agreed in principle; integration discovery report and estimate.
+- Activities: the bank works its 10-12 internal approval functions in *parallel* using the Bank Due-Diligence Pack (2.3-2.4); joint architecture sessions; joint threat-model review; regulatory pre-briefing to the bank's OSFI relationship manager (DepositX attends only if the bank asks); integration discovery against the bank's core, payments hub, GL and treasury.
+- Exit (G2): *Approve-to-Build* from the bank's architecture review and NIAP-equivalent new-initiative committee; TPRM classification of DepositX as a material third party completed with residual risks accepted; InfoSec design approval; legal position on Membership Agreement agreed in principle; integration discovery report and estimate.
 - Artefacts: Discovery Report; Integration Approach Paper (deployment option, core pattern, posting pattern, GL model); gap register; risk-acceptance register.
 
 **S3 Contract**
@@ -153,7 +153,7 @@ Eight stages, seven gates. Each stage has a Concord owner and a bank owner. Gate
 
 **S5 Certify**
 - Entry: G4.
-- Activities: run the Conformance Programme (section 4) in the certification environment with Concord witnessing; independent assessor for security and DR suites.
+- Activities: run the Conformance Programme (section 4) in the certification environment with DepositX witnessing; independent assessor for security and DR suites.
 - Exit: G5 = Pilot-Certified (C2). Later G6 = Production-Certified (C3).
 - Artefacts: signed Conformance Report, defect log, badge certificate (version-bound).
 
@@ -165,7 +165,7 @@ Eight stages, seven gates. Each stage has a Concord owner and a bank owner. Gate
 
 **S7 Production**
 - Entry: G6.
-- Activities: value cap lifting is a *network* decision under supervisory non-objection, not a bank one; hypercare with named Concord engineers; first quarterly release train adoption.
+- Activities: value cap lifting is a *network* decision under supervisory non-objection, not a bank one; hypercare with named DepositX engineers; first quarterly release train adoption.
 - Exit (G7): 90 days meeting SLOs; hypercare closed; Steady-state handover.
 
 **S8 Steady-state**
@@ -175,7 +175,7 @@ Eight stages, seven gates. Each stage has a Concord owner and a bank owner. Gate
 
 Assume a Tier A bank, and assume nothing is coordinated. In my experience of large regulated institutions, a new external-network dependency of this kind runs through the functions below. Names vary by bank; the questions do not.
 
-| Function | What they will ask | Gate role | Unaided elapsed | Concord artefact that answers it |
+| Function | What they will ask | Gate role | Unaided elapsed | DepositX artefact that answers it |
 |---|---|---|---|---|
 | Executive sponsor and investment committee | Business case, cost, strategic alternatives, competitor moves | Funding | 2-4 months | Business case kit (section 7), cost model, peer-adoption briefing |
 | New-initiative / new-product approval committee (NIAP-equivalent) | Does this create a new product or risk type; who signs off | Hard gate | 2-4 months | Initiative paper template, function sign-off matrix |
@@ -212,7 +212,7 @@ Unaided, and run largely in series because each function waits for the previous 
 **Evidence maturity, not evidence promises.** Pack v1.0 has designs. v2.0 (target Aug 2027) adds Phase 1 evidence (10,000 simulated transfers, zero par breaks, PFMI gap assessment, benchmark results). v3.0 (target Q2 2028) adds SOC 2 Type I, first external audit, published formal-verification proofs, bug-bounty results, DR drill results. Type II does not exist until well after Phase 3 starts, so banks approve-to-produce on Type I plus a bridge letter and an in-progress Type II observation window, with the commitment written as a condition subsequent `[V9]`.
 
 **Service model.**
-- Question ledger with a 5-business-day answer SLA and a rule that no bank gets a bespoke answer that other banks do not also see in the pack (clean-team rules apply to the *bank's* confidential data, not to Concord's own answers).
+- Question ledger with a 5-business-day answer SLA and a rule that no bank gets a bespoke answer that other banks do not also see in the pack (clean-team rules apply to the *bank's* confidential data, not to DepositX's own answers).
 - Pre-booked joint review sessions for every function, on a bank-agreed calendar aligned to its committee dates.
 - A named "approval navigator" (from Onboarding) per bank who tracks committee calendars.
 - Metrics: pack reuse rate (share of bank questions answered from the pack) target >80% by Wave 2; average questions per bank falling with each wave.
@@ -252,7 +252,7 @@ A bank starting Engage in October 2026 is pilot-live around Q3 2027 (Phase 2 sta
 
 ## 3. Integration architecture from the bank's side
 
-### 3.1 Reference adapter: the Concord Bank Adapter (CBA)
+### 3.1 Reference adapter: the DepositX Bank Adapter (CBA)
 
 Blueprint principle: "one reference core-banking adapter". I recommend the reference adapter be **core-agnostic by design**, with core-specific *connectors* as thin, certified plug-ins. If we ship a single vendor-specific adapter, we have built for one bank.
 
@@ -261,7 +261,7 @@ Blueprint principle: "one reference core-banking adapter". I recommend the refer
 | Component | Function |
 |---|---|
 | Instruction Gateway | Accepts bank-side instructions (pain.001, pacs.008/009, camt.056, sese for DvP) and returns status (pain.002, pacs.002, camt.029); idempotency keys; schema and business-rule validation |
-| Canonical Model and Mapping Service | Versioned mappings between the bank's internal formats and Concord ISO 20022 Message Usage Guidelines; mapping changes are governed artefacts |
+| Canonical Model and Mapping Service | Versioned mappings between the bank's internal formats and DepositX ISO 20022 Message Usage Guidelines; mapping changes are governed artefacts |
 | Core Posting Service (connector plug-ins) | Executes mint-hold, redeem-credit and net-settlement postings via MQ, REST, file, or database-view connectors; outbox/inbox pattern; retries with exactly-once effect |
 | Position and Reconciliation Engine | Continuous three-way reconciliation (3.6); break management; auto-freeze rule when tolerances are breached |
 | Wallet and Key Service | Bank-hosted wallets; HSM integration (PKCS#11/KMIP); issuer-key signing; ceremony hooks |
@@ -286,13 +286,13 @@ The issuer must always own its validator identity and issuer signing keys in an 
 
 | | **A. Bank-operated validator** | **B. Managed node-as-a-service (NaaS)** | **C. Hosted in bank DC, co-managed** |
 |---|---|---|---|
-| What it is | Bank builds and runs validator plus adapter on its own infrastructure (own DC or own Canadian cloud tenancy) | Certified TP-3 provider hosts and operates the validator and adapter in its Canadian facilities; bank's HSM partition (in provider DC or bank-DC HSM with remote signing) stays under bank control | Sealed reference stack (validated cluster) installed in the bank's DC; operated jointly through a bank-controlled bastion; updated by signed bundles delivered by Concord or a TP-3 |
+| What it is | Bank builds and runs validator plus adapter on its own infrastructure (own DC or own Canadian cloud tenancy) | Certified TP-3 provider hosts and operates the validator and adapter in its Canadian facilities; bank's HSM partition (in provider DC or bank-DC HSM with remote signing) stays under bank control | Sealed reference stack (validated cluster) installed in the bank's DC; operated jointly through a bank-controlled bastion; updated by signed bundles delivered by DepositX or a TP-3 |
 | Default for | Tier A | Tier B (common), Tier C (default) | Tier A/B that want DC residency but not build-and-run |
 | Control | Highest | Medium | High |
 | Time to first node | 4-6 months | 4-8 weeks | 2-4 months |
 | Upgrade agility | Bank-paced (needs skew policy) | Fast, provider-paced within release train | Bundle-paced |
 | Bank effort (see 3.7) | Highest | Lowest | Medium |
-| TPRM implication | Concord operator is the material third party | Adds a second material third party (the provider); needs exit plan and step-in rights | Concord/TP is a supplier of managed components; bank owns the environment |
+| TPRM implication | DepositX operator is the material third party | Adds a second material third party (the provider); needs exit plan and step-in rights | DepositX/TP is a supplier of managed components; bank owns the environment |
 | Regulatory posture | Simplest | Needs B-10 evidence on the provider `[V9]` | Middle |
 
 **Minimum validator standard (any option):** two Canadian sites; hardware security modules certified to a recognised level (FIPS 140-3 Level 3 or bank-policy equivalent) `[V16]`; diverse dedicated network paths; time synchronisation from two independent sources; measured inter-validator latency budget consistent with the sub-2-second median finality target; separate non-production topology; ledger, keys and backups in Canada, including DR copies.
@@ -310,12 +310,12 @@ The design intent (and the sales pitch to a bank CIO): **the core sees far less 
 | Core situation | Pattern | Notes |
 |---|---|---|
 | **Mainframe / in-house core with MQ** | Adapter is an MQ client exchanging ISO 20022 XML; COBOL copybook and CICS wrappers or z/OS Connect for mapping; posting via existing online transaction or batch-input queues | Typical for Tier A. The mainframe rarely has 24/7 posting; use posting pattern P2 (below). Load is small, latency budget is generous because the core is not on the finality path. |
-| **ISO 20022 gateway / payments hub already in place** | Concord becomes a new *rail* on the hub: routing rule, scheme configuration, status mapping, fallback | Preferred for Tier A/B: reuse the bank's repair, enrichment, cut-off logic and sanctions hooks; keep Concord's own screening as authoritative for the network |
+| **ISO 20022 gateway / payments hub already in place** | DepositX becomes a new *rail* on the hub: routing rule, scheme configuration, status mapping, fallback | Preferred for Tier A/B: reuse the bank's repair, enrichment, cut-off logic and sanctions hooks; keep DepositX's own screening as authoritative for the network |
 | **Temenos, FIS, Finastra, Fiserv (vendor cores)** | Use the vendor's supported integration surface: event streaming and REST APIs where the deployed version supports them, otherwise MQ or file; connector shipped as a TP-1 certified component | Vendor names indicate integration families only. **What each deployed version can actually do (24/7 posting, API coverage, custom-field support) must be confirmed per bank per version** `[V13]`. |
 | **In-house / heritage core with no API** | Adapter reads and writes through an anti-corruption layer (database view, batch file, or vendor-neutral service the bank builds) | Highest effort. Likely to need a bank-built shim. The certification suite tests the shim, not the core. |
 | **Multiple cores** (retail core, commercial core, wire system) | One adapter instance per issuing legal entity; per-core connectors behind the same Core Posting Service | Big banks will have this. The token backing GL is the single point where they converge. |
 
-**24/7 posting patterns.** Cores have batch windows; Concord has no maintenance window. Three patterns:
+**24/7 posting patterns.** Cores have batch windows; DepositX has no maintenance window. Three patterns:
 - **P1: Real-time core posting.** Core (or payments hub) accepts postings 24/7. Simplest; use where it exists.
 - **P2: Pre-funded token accounts (default for legacy cores).** During core-online hours the customer moves funds into a segregated "tokenisation backing" balance. Mint and redeem after hours consume or replenish that backing pool through the adapter's durable ledger; the core catches up at next window. Supply is exactly the backing GL balance at every instant, so par integrity does not depend on core availability.
 - **P3: Adapter stand-in with queued posting.** Limited to redemptions below a cap, with holds. Higher risk; requires explicit issuer risk acceptance. Not permitted in production for a bank's first year.
@@ -330,7 +330,7 @@ Treasurers will sign off only if they can see and control liquidity in real time
 
 Inputs the bank sets: bilateral and multilateral caps, minimum settlement balance, auto-top-up rules, kill-switches, and a "liquidity stress" mode that tightens limits.
 
-**Unresolved and blocking for Treasury sign-off:** the blueprint does not say how central-bank money anchors the interbank leg. Does the issuer pre-fund a settlement position at the Bank of Canada, settle net at intervals via Lynx or a Concord-specific arrangement, or hold collateral? My working assumption for the pack is a **pre-funded settlement position** per issuer, replenished from the bank's own accounts. That is the conservative case and the easiest for ALCOs to approve. It must be confirmed by the Settlement, Finance and Regulatory seats `[V1]`. Further items ALM will ask about and that need verified answers:
+**Unresolved and blocking for Treasury sign-off:** the blueprint does not say how central-bank money anchors the interbank leg. Does the issuer pre-fund a settlement position at the Bank of Canada, settle net at intervals via Lynx or a DepositX-specific arrangement, or hold collateral? My working assumption for the pack is a **pre-funded settlement position** per issuer, replenished from the bank's own accounts. That is the conservative case and the easiest for ALCOs to approve. It must be confirmed by the Settlement, Finance and Regulatory seats `[V1]`. Further items ALM will ask about and that need verified answers:
 - Intraday liquidity monitoring and reporting obligations `[V4]`.
 - Funds transfer pricing for tokenised deposits.
 - Weekend/holiday liquidity management for a 24/7 deposit rail.
@@ -343,10 +343,10 @@ Inputs the bank sets: bilateral and multilateral caps, minimum settlement balanc
 |---|---|
 | Deposits, tokenised (by holder segment) | Liability |
 | Tokenisation backing account (P2 pattern) | Liability, transitional |
-| Settlement balance, Concord | Asset |
+| Settlement balance, DepositX | Asset |
 | Inter-issuer settlement receivable / payable | Asset / Liability |
 | Reconciliation suspense (with ageing) | Clearing |
-| Concord fees | Expense / income |
+| DepositX fees | Expense / income |
 
 | Event | Journal (illustrative) |
 |---|---|
@@ -371,8 +371,8 @@ Inputs the bank sets: bilateral and multilateral caps, minimum settlement balanc
 I recommend the operator commission a single independent accounting and regulatory-treatment paper for the pack (not from any member's auditor of record), and that OSFI be asked for written feedback on it *before* Wave 1 banks reach Approve-to-Pilot. No bank Chief Accountant will sign a novel classification on a vendor's assertion.
 
 **Payments-hub integration.**
-- Concord appears as a rail with routing rule: "payee's bank is a participant, both accounts eligible, value within limits". Status mapping from Concord outcomes to pain.002 / pacs.002.
-- **Fallback routing**: if Concord is unavailable or an instruction is ambiguous, fall back to Lynx or the Real-Time Rail only after querying deterministic status by transfer ID (pacs.028-style status request). Because Concord has no partial or pending state, an instruction has exactly one of two outcomes; the hub must never double-send.
+- DepositX appears as a rail with routing rule: "payee's bank is a participant, both accounts eligible, value within limits". Status mapping from DepositX outcomes to pain.002 / pacs.002.
+- **Fallback routing**: if DepositX is unavailable or an instruction is ambiguous, fall back to Lynx or the Real-Time Rail only after querying deterministic status by transfer ID (pacs.028-style status request). Because DepositX has no partial or pending state, an instruction has exactly one of two outcomes; the hub must never double-send.
 - Reporting: camt.052/053/054 mapping into the bank's cash-management channels so corporates see tokenised balances in their normal statements.
 - Returns: implemented as new payments (pacs.004-style semantics), never as ledger reversal. Finality means finality.
 
@@ -415,7 +415,7 @@ I recommend the operator commission a single independent accounting and regulato
 
 Modifiers: first-wave co-design Tier A +40% (~630 PM); foreign bank subsidiary +30% for parent-group approvals; a bank on option B (NaaS) saves about 20-25% of Build.
 
-**Concord-side onboarding effort per bank (person-months):** Tier A ~100 (S1 4, S2 14, S3 10, S4 28, S5 18, S6 14, S7 10); Tier B ~45; Tier C ~20. First-wave Tier A ~160.
+**DepositX-side onboarding effort per bank (person-months):** Tier A ~100 (S1 4, S2 14, S3 10, S4 28, S5 18, S6 14, S7 10); Tier B ~45; Tier C ~20. First-wave Tier A ~160.
 
 **Where cost sits (Tier A Build, 240 PM):**
 
@@ -449,12 +449,12 @@ Across the whole path, testing, risk/legal/finance governance and operational re
 
 ### 4.1 Conformance test catalogue
 
-The catalogue is owned by Concord Assurance (Integration & assurance workstream) and executed by the bank with Concord witnessing. Results are signed evidence, not attestations.
+The catalogue is owned by DepositX Assurance (Integration & assurance workstream) and executed by the bank with DepositX witnessing. Results are signed evidence, not attestations.
 
 | Suite | Scope | Examples | Indicative size |
 |---|---|---|---|
 | **F Functional** | End-to-end flows | Wallet setup; mint; same-issuer transfer; inter-issuer transfer; redeem; DvP cash leg; conditional and escrow payments; limits and velocity; KYC attestation; sanctions hit; returns as new payments | ~400 cases |
-| **M ISO 20022 conformance** | Message-level | Schema validation; Concord Message Usage Guideline business rules; negative tests; duplicates; version handling; character set; round-trip mapping | ~1,200 vectors |
+| **M ISO 20022 conformance** | Message-level | Schema validation; DepositX Message Usage Guideline business rules; negative tests; duplicates; version handling; character set; round-trip mapping | ~1,200 vectors |
 | **R Reconciliation and accounting** | Bank-side books | GL posting correctness per event; four-level reconciliation; break injection and ageing; end-of-day positions | ~150 cases |
 | **X Failure injection** | Resilience | Core down; MQ backlog; adapter crash mid-saga; duplicate and reordered messages; clock skew; HSM unavailable; network partition; validator crash; grey-failure (slow validator); consensus stall; API gateway flood | ~80 scenarios |
 | **P Par-break drills** | The invariant | Inject supply > backing; tampered mint; contract-defect simulation; verify detection time, halt behaviour and scope (issuer freeze vs network halt), recovery and resumption criteria, comms and regulator notification | ~15 drills, all mandatory |
@@ -472,11 +472,11 @@ The catalogue is owned by Concord Assurance (Integration & assurance workstream)
 | Env | Purpose | Who | Data | Notes |
 |---|---|---|---|---|
 | **E0 Playground** | Learn and prototype: single-node network, documented examples, ISO 20022 validators, SDK | Anyone in onboarding; TPs | Synthetic | Open to prospective participants after G1 |
-| **E1 Integration Sandbox** | Shared multi-issuer testnet with per-bank tenant; **Bot Banks** (Concord-run counterparties that generate traffic and inject faults) | Banks in S4; TPs | Synthetic | Refreshed weekly or on demand. Bot Banks mean no bank depends on another bank being ready. |
-| **E2 Certification Environment** | Production-identical topology, versions pinned, scripted harness. Only place badges are issued | Banks in S5 | Synthetic | Reserved slots; Concord-controlled |
+| **E1 Integration Sandbox** | Shared multi-issuer testnet with per-bank tenant; **Bot Banks** (DepositX-run counterparties that generate traffic and inject faults) | Banks in S4; TPs | Synthetic | Refreshed weekly or on demand. Bot Banks mean no bank depends on another bank being ready. |
+| **E2 Certification Environment** | Production-identical topology, versions pinned, scripted harness. Only place badges are issued | Banks in S5 | Synthetic | Reserved slots; DepositX-controlled |
 | **E3 Pilot Ring** | Live topology with real regulator read-nodes; capped real value | Banks in S6 | Live, capped | Supervisory posture required |
 | **E4 Production** | | | Live | |
-| **Sim Lab** (cross-cutting) | Network simulator with latency and validator-failure injection; traffic replay; par-break simulator using a deliberately faulty contract build | Concord Assurance with banks | Synthetic | Used for suites X, P, N |
+| **Sim Lab** (cross-cutting) | Network simulator with latency and validator-failure injection; traffic replay; par-break simulator using a deliberately faulty contract build | DepositX Assurance with banks | Synthetic | Used for suites X, P, N |
 
 ### 4.3 Badge criteria
 
@@ -487,7 +487,7 @@ The catalogue is owned by Concord Assurance (Integration & assurance workstream)
 | **C3 Production-Certified** | All suites; N passed; live DR failover executed; 30 consecutive days in the Pilot Ring with zero unexplained reconciliation breaks and zero par events; 24/7 operations proven; Operator SOC 2 Type I complete (Type II in progress) `[V9]` | G6; production |
 | **Connector / Integrator / Service Provider certificates (TP)** | Connector: suites F, M, X against the vendor's reference environment and named versions. Integrator: named certified engineers plus two supervised reference deliveries. Service provider: full node-operation certification, DR, B-10 evidence | Listing on the Approved Partner Register |
 
-**Certification decisions** are taken by a Certification Board: Concord Head of Assurance (chair), an independent assessor, and a rotating member from another issuing bank; the Bank of Canada and OSFI are invited to observe. A bank never certifies itself or a direct competitor's bank alone.
+**Certification decisions** are taken by a Certification Board: DepositX Head of Assurance (chair), an independent assessor, and a rotating member from another issuing bank; the Bank of Canada and OSFI are invited to observe. A bank never certifies itself or a direct competitor's bank alone.
 
 ### 4.4 Recertification triggers
 
@@ -496,7 +496,7 @@ Badges are valid for **12 months** and bound to a **version range** (for example
 | Trigger | Response |
 |---|---|
 | Network major version | Full delta certification (affected suites) |
-| Network minor version | Automated regression pack (suite U plus F/M subset); self-service with Concord verification |
+| Network minor version | Automated regression pack (suite U plus F/M subset); self-service with DepositX verification |
 | Adapter or connector version change | Delta certification of impacted suites |
 | Core or payments-hub major upgrade; hosting move; change of node provider; HSM firmware or crypto-suite change (mandatory for PQ migration in Phase 4) | Delta certification plus DR retest where topology changes |
 | Sev-1 incident attributed to the participant | Root-cause-based recertification of the affected suites |
@@ -519,7 +519,7 @@ The tension: six or more banks with different change calendars, versus a network
 
 **Change calendars and freezes**
 - Every participant registers its change freezes 12 months ahead (fiscal year-end, December, quarter-ends; verify each bank's calendar in Contract `[V14]`). The NCAB merges them into a network change calendar and schedules activation heights outside any *major* participant's freeze wherever possible.
-- **Pre-approved standard-change status:** at Contract, each bank agrees that Concord *patch* releases meeting defined criteria (signed, regression pack green, no schema change) are a pre-approved standard change in its ITSM, so a critical patch does not wait for a monthly change board. Critical security patch deployment SLA: 72 hours; high: 14 days.
+- **Pre-approved standard-change status:** at Contract, each bank agrees that DepositX *patch* releases meeting defined criteria (signed, regression pack green, no schema change) are a pre-approved standard change in its ITSM, so a critical patch does not wait for a monthly change board. Critical security patch deployment SLA: 72 hours; high: 14 days.
 - **Zero-downtime mechanics:** rolling node upgrades; blue/green for adapters; rollback tested as part of suite U.
 - A nightly compatibility matrix (N and N-1 against every certified adapter and connector version) runs in E2.
 
@@ -604,7 +604,7 @@ The blueprint's six delivery pods have no bank-facing onboarding function. I pro
 
 ## 6. Member support operating model
 
-### 6.1 Concord Network Operations Centre (CNOC)
+### 6.1 DepositX Network Operations Centre (CNOC)
 
 - **Phase 1:** business hours plus on-call. **Phase 2:** 24/7 staffed, 2 seats plus an on-call incident commander. **Phase 3:** 24/7 with 3 seats plus a duty incident commander and a dedicated member service desk.
 - Staff and tooling in Canada. Two Canadian sites; five-shift roster (one seat around the clock needs about 5.5 FTE; the full CNOC is ~14-18 FTE within the blueprint's 40-60 operator run team).
@@ -643,11 +643,11 @@ Detect; T+5 min internal incident declared; **T+15 min all members notified** wi
   - *Partner Forum* (technology partners).
   - Regulator liaison meeting, with regulators invited to any of the above.
 - **Competition-law protocol** for all forums: written agenda, counsel present, no exchange of pricing or client-level data, minutes reviewed. `[V10]`
-- **Information barriers:** each bank's confidential material is held in segregated data rooms; Concord staff do not carry one bank's confidential information to another; clean-team arrangements for any cross-bank data sharing.
+- **Information barriers:** each bank's confidential material is held in segregated data rooms; DepositX staff do not carry one bank's confidential information to another; clean-team arrangements for any cross-bank data sharing.
 
 ### 6.5 Roadmap-influence process (so competing banks feel governed fairly)
 
-1. **Concord Improvement Proposals (CIPs):** any participant, or any two members jointly, can submit. Every submission is public to members with a status and rationale.
+1. **DepositX Improvement Proposals (CIPs):** any participant, or any two members jointly, can submit. Every submission is public to members with a status and rationale.
 2. **Triage** by the Operator within 10 business days: completeness, regulatory necessity, duplicates.
 3. **Impact analysis:** cost, risk, cross-participant effect, effect on invariants (anything weakening Par, Finality or Perimeter is rejected outright, per the blueprint).
 4. **Scoring** (published rubric): network value; risk reduction; regulatory necessity; cost; number of participants requesting it.
@@ -677,7 +677,7 @@ No side letters; MFN pricing; identical SLAs by tier; identical certification cr
 | | Certification currency and drill completion | 100% |
 | **Adoption and value** | Active corporate clients per bank | Growing |
 | | Instructions, value settled | Growing |
-| | Share of eligible flow settled on Concord | Toward 95% wholesale by end of Phase 3 |
+| | Share of eligible flow settled on DepositX | Toward 95% wholesale by end of Phase 3 |
 | | Use-case value realised vs hypothesis (section 7) | Reported quarterly |
 | **Fairness and health** | Roadmap items originating from non-founders | >30% by 2029 |
 | | Council attendance | >85% |
@@ -739,7 +739,7 @@ Each bank needs a business case that does not depend on many other banks being l
 | 5 | **Governance deadlock or competition-law friction** between competing banks | High | Objective admission criteria; one participant one vote in technical councils; CIP process; competition-law protocol; rotating boards; independent chair `[V10]` | Governance seat |
 | 6 | **Slow bank or wave slippage vs phase dates** | High | Lanes and clocks; quorum-based phase exits; Founding Issuer Charter by end Q1 2027; slot release; Bot Banks; staged validator demotion | Head of Onboarding |
 | 7 | **Bank-side operational failure after go-live** (reconciliation, keys, runbooks) leading to a par event | High impact | Certification zero-tolerance list; par-break drills; fail-closed adapter; 30-day soak; dual checks on mint; hypercare | Head of Assurance |
-| 8 | **Concord itself as a concentration risk** and an immature operator under OSFI B-10 (no SOC 2 Type II until later) | Med-High | B-10 dossier; exit plan and ledger-copy rights; bridge letters; independent audit; step-in and standalone-validator capability `[V9]` | Operator CEO / Risk seat |
+| 8 | **DepositX itself as a concentration risk** and an immature operator under OSFI B-10 (no SOC 2 Type II until later) | Med-High | B-10 dossier; exit plan and ledger-copy rights; bridge letters; independent audit; step-in and standalone-validator capability `[V9]` | Operator CEO / Risk seat |
 | 9 | **Vendor, SI and talent capacity** (few engineers with this skill set; vendors prioritising other clients) | Med | TP certification programme; Approved Partner Register; training academy; secondments; connector interface published; escrow | Technology-partner manager |
 | 10 | **Version skew and change-calendar conflicts** cause an outage or stall upgrades | Med-High | Release train; N/N-1 skew; expand-contract activation; standard-change status; merged change calendar; canary issuer; nightly compatibility matrix | Head of Release & Operations |
 
@@ -747,7 +747,7 @@ Each bank needs a business case that does not depend on many other banks being l
 
 R = does the work; A = accountable (one per row); C = consulted; I = informed; a dash means not involved. Regulators are accountable only for their own decisions.
 
-| Activity | Concord Operator | Issuing Bank | Technology Vendor(s) | Regulators |
+| Activity | DepositX Operator | Issuing Bank | Technology Vendor(s) | Regulators |
 |---|---|---|---|---|
 | Admission decision (eligibility, Membership Committee) | A/R | C | - | I |
 | Supervisory consultation and non-objection | R | C | - | A |
@@ -807,7 +807,7 @@ Nothing below should be treated as established. Each item needs an owner and a d
 ## Appendix B. Dependencies on other seats
 
 - **Platform & Ledger:** staged validator promotion and demotion; N/N-1 protocol compatibility and dual-read activation; validator-set size and performance; adapter hooks for supply commitments.
-- **Settlement & programmability:** Concord Message Usage Guidelines (ISO 20022) for suite M; DvP and conditional templates for rungs 2-3; netting design for treasury.
+- **Settlement & programmability:** DepositX Message Usage Guidelines (ISO 20022) for suite M; DvP and conditional templates for rungs 2-3; netting design for treasury.
 - **Compliance & identity:** KYC-attestation model the adapter consumes; screening callbacks; Travel Rule payload spec.
 - **Legal / governance / regulatory:** Membership Agreement, Rulebook clauses (go-live covenant, NIP self-custody, service-level remedies, exit and step-in), competition-law protocol, finality and insolvency opinions, regulator MOUs.
 - **Finance (funding and revenue model):** programme funding shares, catch-up formula, fee schedule; the inside/outside decision on bank-side integration cost.

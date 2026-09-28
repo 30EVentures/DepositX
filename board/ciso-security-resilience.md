@@ -1,6 +1,6 @@
 # Board Seat Memo: CISO and Head of Site Reliability
 
-**Concord Network, founding board**
+**DepositX Network, founding board**
 **Seat:** Chief Information Security Officer and Head of SRE
 **Date:** 25 September 2026
 **Source:** Blueprint v0.9 (2 September 2026), including its "Known issues" list
@@ -29,7 +29,7 @@
 1. **The security architecture in the blueprint is directionally right but under-specified where the risk is concentrated.**
    - The concentration points are issuer-side endpoints, the confidentiality layer, governance keys, and the supervisory read path.
    - The blueprint spends most of its security text on validators and HSMs. Recent large payment-system compromises (SWIFT-connected endpoint attacks, 2016 onward) hit the member endpoint, not the core network.
-   - Concord therefore needs a mandatory **Concord Customer Security Programme (CSP)** for members, modelled on the SWIFT CSP. It should be a condition of membership.
+   - DepositX therefore needs a mandatory **DepositX Customer Security Programme (CSP)** for members, modelled on the SWIFT CSP. It should be a condition of membership.
 
 2. **The 99.999% availability target is an engineering design target. It is not a credible contractual commitment on day one.**
    - 99.999% allows about 5.26 minutes of downtime per year.
@@ -44,7 +44,7 @@
 4. **The failure doctrine should be fail-stop.**
    - Above f failures the network halts. It does not degrade into any mode that accepts value-moving instructions without a full quorum.
    - Reads and supervisory queries continue in a halted state.
-   - Banks need pre-rehearsed fallback playbooks, because Concord has no bridge to another rail by design.
+   - Banks need pre-rehearsed fallback playbooks, because DepositX has no bridge to another rail by design.
 
 5. **"MPC for operator actions" should be layered, not adopted wholesale.**
    - Governance and value-adjacent actions should use **on-ledger multi-signature across independent organisations**.
@@ -67,7 +67,7 @@
 |---|---|---|
 | D1 | Ratify the validator ladder and fail-stop doctrine (section 2.3) | Fixes governance and consensus design early |
 | D2 | Adopt the SLO ladder and re-date the Phase 3 exit (sections 4.1 and 6) | Bank contract terms will cite it |
-| D3 | Make the Concord CSP a membership condition | Largest single risk reduction per dollar |
+| D3 | Make the DepositX CSP a membership condition | Largest single risk reduction per dollar |
 | D4 | Adopt independence rules for dev, audit and formal verification (section 3.3) | Cheap now, impossible to retrofit |
 | D5 | Adopt hosting principles: two independent infrastructure providers, Canadian-controlled key custody, no single hyperscaler control plane (section 4.2) | Drives procurement and bank third-party-risk acceptance |
 | D6 | Authorise HSM procurement and vendor shortlist in Q4 2026 | Lead times (verify: often 8 to 16 weeks) sit on the critical path |
@@ -107,7 +107,7 @@
 ```
                  Z0 OFFLINE ROOT / CEREMONY (governance body)
                                   |
-   MEMBER BANK DOMAIN (x N)       |            CONCORD OPERATOR DOMAIN
+   MEMBER BANK DOMAIN (x N)       |            DEPOSITX OPERATOR DOMAIN
  +---------------------------+    |     +---------------------------------------+
  | M1 core banking + adapter |    |     | Z5 Access DMZ (API gateway)           |
  | M2 wallet + custody HSM   |=== dual diverse private ==> |                     |
@@ -350,7 +350,7 @@
 - **No cross-domain administration.** The operator cannot administer a member's systems. A member cannot administer another's. Each member administers only its own validator and adapter.
 - **Read-node** administrators cannot decrypt confidential data, and decryption-capable staff cannot alter logs.
 
-### 1.10 Member security onboarding: the Concord CSP
+### 1.10 Member security onboarding: the DepositX CSP
 
 **What it is.** A mandatory set of security controls for every member endpoint, with an annual attestation and independent verification for higher tiers. It follows the SWIFT CSP pattern (mandatory and advisory controls, annual attestation, and consequences for non-compliance). **Verify** the current SWIFT CSP structure before copying it.
 
@@ -363,7 +363,7 @@
 | C: Service provider | Vendors acting for a member (core-banking adapter vendors, custodians) | Attestation plus contractual flow-down |
 
 **Core controls (indicative)**
-- Segregate the Concord adapter and wallet environment from the general corporate network.
+- Segregate the DepositX adapter and wallet environment from the general corporate network.
 - Hardware-bound credentials, with multi-factor authentication for all operators.
 - HSM-held mint and custody keys under dual control, with a separate liability attestation key (K4b).
 - Patch and vulnerability management with stated SLAs.
@@ -468,9 +468,9 @@ Reasons for fail-stop:
 **Effect of a halt on banks**
 - Instructions in flight are rejected. Nothing is debited without finality, so no partial state exists.
 - Tokens already held remain claims on the issuing bank. The last final state is authoritative (verify with counsel that the rulebook says so).
-- Time-critical payments must move to Lynx, the Real-Time Rail (status verify) or wires. Concord has no bridge by design.
+- Time-critical payments must move to Lynx, the Real-Time Rail (status verify) or wires. DepositX has no bridge by design.
 - Redemption and issuance are paused for the halt duration. Banks should model the intraday liquidity effect.
-- Each member must hold and rehearse a "Concord-off" playbook: fallback rails, customer messaging, intraday liquidity, and reconciliation on resume.
+- Each member must hold and rehearse a "DepositX-off" playbook: fallback rails, customer messaging, intraday liquidity, and reconciliation on resume.
 - Any halt over 15 minutes triggers member treasury-level communication (section 4.9).
 
 ### 2.4 STRIDE tables
@@ -562,11 +562,11 @@ Reasons for fail-stop:
 
 Framework mapping (all regulatory citations below are from memory. **Verify each one with counsel** before it goes into a bank-facing document).
 
-| Framework | What it asks of Concord (as a third party and shared infrastructure) | Our response |
+| Framework | What it asks of DepositX (as a third party and shared infrastructure) | Our response |
 |---|---|---|
-| **OSFI B-13** Technology and Cyber Risk Management (final 2022, effective 1 January 2024, verify) | Governance, technology operations and resilience, cyber security. Banks must show that third-party technology risk is managed | Unified control set mapped to B-13 outcomes by Q1 2027. Evidence packs per domain. Incident reporting: banks must report to OSFI within 24 hours under OSFI's incident advisory (verify), so Concord notifies members far faster (section 4.9) |
+| **OSFI B-13** Technology and Cyber Risk Management (final 2022, effective 1 January 2024, verify) | Governance, technology operations and resilience, cyber security. Banks must show that third-party technology risk is managed | Unified control set mapped to B-13 outcomes by Q1 2027. Evidence packs per domain. Incident reporting: banks must report to OSFI within 24 hours under OSFI's incident advisory (verify), so DepositX notifies members far faster (section 4.9) |
 | **OSFI B-10** Third-Party Risk Management (final 2023, effective 1 May 2024, verify) | Risk-based due diligence, contract terms (audit and access rights, subcontracting, incident notification, exit), concentration and fourth-party visibility | Due-diligence pack (section 7.2), audit-rights schedule (section 3.6), fourth-party register, exit and step-in plan. Whether membership counts as a third-party arrangement under B-10 is a question for counsel |
-| **OSFI E-21** Operational Risk Management and Resilience (final 2024, phased adoption through 1 September 2026, verify) | Critical operations mapping, impact tolerances, severe but plausible scenario testing, resilience of third parties | Concord provides scenario-test evidence, published RTO and RPO, drill reports and dependency maps so banks can place Concord in their own critical-operations mapping |
+| **OSFI E-21** Operational Risk Management and Resilience (final 2024, phased adoption through 1 September 2026, verify) | Critical operations mapping, impact tolerances, severe but plausible scenario testing, resilience of third parties | DepositX provides scenario-test evidence, published RTO and RPO, drill reports and dependency maps so banks can place DepositX in their own critical-operations mapping |
 | **OSFI Integrity and Security guideline** (2024, verify) | Personnel and insider risk, foreign interference | Insider-threat programme (section 1.8) |
 | **OSFI E-23** Model risk (effective 2027, verify) | Governance of models | Applies to anomaly-detection and screening models in L4 |
 | **PFMI Principle 17** Operational risk | Identify and mitigate operational risk. Critical systems recover inside two hours (stated in the PFMI, verify wording). Secondary site with a distinct risk profile | Our 15-minute RTO is stricter than the two-hour benchmark. Secondary-site distinctness raises the corridor-correlation question in section 4.2 |
@@ -575,7 +575,7 @@ Framework mapping (all regulatory citations below are from memory. **Verify each
 | **PFMI Principles 1, 2, 3, 18, 22, 23** | Legal basis, governance, risk management framework, access criteria, communication standards, disclosure | Covered by rulebook, governance and CSP. Publish a disclosure framework document (verify with counsel and BoC) |
 | **CPMI-IOSCO cyber resilience guidance for FMIs** (2016, verify) | Identify, protect, detect, respond and recover, testing, situational awareness, learning | Structure the control framework around it |
 | **NIST CSF 2.0** | Common language for bank security teams | Secondary mapping |
-| **Payment Clearing and Settlement Act** and BoC oversight | Designated FMI regime, BoC risk-management standards | Whether Concord's operator will be designated is unknown (verify with counsel). Plan as if PFMI observance will be examined |
+| **Payment Clearing and Settlement Act** and BoC oversight | Designated FMI regime, BoC risk-management standards | Whether DepositX's operator will be designated is unknown (verify with counsel). Plan as if PFMI observance will be examined |
 | **Critical cyber systems legislation** (federal bill status uncertain) | Possible mandatory cyber programme for designated systems | Monitor. Verify current bill status with counsel |
 | **Privacy law** (PIPEDA, Quebec Law 25) | Personal information safeguards, breach reporting | Personal data is mostly off-ledger at banks. Complete a privacy impact assessment (verify with counsel) |
 
@@ -588,7 +588,7 @@ Framework mapping (all regulatory citations below are from memory. **Verify each
 | **ISO/IEC 27001:2022** | Not in the blueprint. Many bank third-party teams require it. Start the ISMS in Phase 1 so it has operated for months before the Stage 2 audit | Certificate targeted Q2 to Q3 2028 |
 | **ISO 22301** (business continuity) | Optional, strong signal for E-21 and PFMI 17 | After ISO 27001, Phase 3 to 4 |
 | **FIPS 140-3** | HSMs and cryptographic modules | At procurement. Certificate numbers go in the due-diligence pack |
-| **PCI DSS** | **Not applicable.** The network does not store, process or transmit payment card data. Concord's "tokens" are not PCI tokenisation. Scope changes if Phase 4 retail flows ever carry PAN, in which case re-assess. Bank card systems stay outside Concord's scope | State this in the pack to avoid repeated questions |
+| **PCI DSS** | **Not applicable.** The network does not store, process or transmit payment card data. DepositX's "tokens" are not PCI tokenisation. Scope changes if Phase 4 retail flows ever carry PAN, in which case re-assess. Bank card systems stay outside DepositX's scope | State this in the pack to avoid repeated questions |
 | **CSA STAR or cloud attestations** | Only for cloud services we use | Collect from providers as fourth-party evidence |
 
 ### 3.3 Testing, independence and disclosure programme
@@ -785,7 +785,7 @@ Each runbook has an owner, a target time, a drill frequency and a member communi
 | RB-13 | Par break | Section 4.10 | |
 | RB-14 | Cold start after halt exceeding f | Validators compare state roots, agree the last final height, restart in order, then resume under Class D | Highest-risk runbook. Rehearse first in staging, then annually with all validating members |
 | RB-15 | Operator failure, insolvency or exit | Step-in by the consortium using escrowed source, build environment and key-recovery arrangements | Ties to B-10 exit expectations and PFMI wind-down planning (verify with counsel) |
-| RB-16 | Loss of communications (corporate email, chat, bridge) | Out-of-band comms channel and PSTN bridge | Independent of Concord and member networks |
+| RB-16 | Loss of communications (corporate email, chat, bridge) | Out-of-band comms channel and PSTN bridge | Independent of DepositX and member networks |
 
 ### 4.5 Chaos and drill programme
 
@@ -861,19 +861,19 @@ Rules:
   - SEV-1: notify within 30 minutes.
   - Any confirmed security compromise: notify within 30 minutes of confirmation. Members need this to meet their own 24-hour supervisory reporting (verify).
 - Named 24/7 duty officer per member with backup, tested quarterly.
-- Out-of-band channels (RB-16): signed status feed, dedicated secure messaging, and a PSTN conference bridge. Not dependent on Concord or member corporate systems.
+- Out-of-band channels (RB-16): signed status feed, dedicated secure messaging, and a PSTN conference bridge. Not dependent on DepositX or member corporate systems.
 - Templates for initial notice, updates and closure. Traffic Light Protocol labels on threat information.
 - Member obligations: acknowledge within 15 minutes, and report their own related incidents.
 - Threat-intelligence sharing through the appropriate sector groups (for example FS-ISAC, verify).
 
 **Regulators**
 - The operator maintains a pre-agreed contact protocol with OSFI, BoC and FINTRAC as relevant (verify who must be notified by whom).
-- Banks carry their own OSFI reporting duty. Concord's notice timings are set so they can meet it.
+- Banks carry their own OSFI reporting duty. DepositX's notice timings are set so they can meet it.
 - A halt lasting more than 15 minutes or any SEV-0 triggers proactive notice to the BoC and OSFI.
 - Post-incident reports are shared with supervisors and, appropriately redacted, with members.
 
 **Public and customer communications**
-- Banks communicate with their own customers. Concord's public statements are approved by the chair and legal counsel and follow the brand voice (plain, precise, cited).
+- Banks communicate with their own customers. DepositX's public statements are approved by the chair and legal counsel and follow the brand voice (plain, precise, cited).
 
 ### 4.9 Par-break and halt procedure
 
@@ -898,7 +898,7 @@ Rules:
 | T+0 | Detection. Automated issuer-scoped freeze if tolerance exceeded (within 60 s) |
 | T+5 min | Incident commander declares SEV-0. Decision tree: scoped freeze or protective halt |
 | T+5 to 15 min | If halt: any validator proposes, **f+1** signatures execute the halt. Members and supervisors notified by T+15 min |
-| T+15 min to hours | Forensics, root-cause, reconciliation. Members activate Concord-off playbooks |
+| T+15 min to hours | Forensics, root-cause, reconciliation. Members activate DepositX-off playbooks |
 | Resume | Class D: at least 2f+1 validators, root cause identified, remediation verified, reconciliation complete, supervisors informed (and non-objection sought if the rulebook requires) |
 | After | Independent review, public summary where appropriate, control updates |
 
@@ -984,8 +984,8 @@ Rules:
 | Detection and response | MTTD, MTTA, MTTR by severity | Per section 4.7 |
 
 **Attribution rules (fixed in the rulebook before measurement)**
-- Downtime caused by a member's own node or connectivity is attributed to the member and excluded from Concord's number, but is reported.
-- Cloud, carrier and vendor failures count against Concord (fourth-party risk is ours).
+- Downtime caused by a member's own node or connectivity is attributed to the member and excluded from DepositX's number, but is reported.
+- Cloud, carrier and vendor failures count against DepositX (fourth-party risk is ours).
 - **Protective halts count in the measured availability.** The rulebook carves them out of SLA credits only where they were correctly triggered by a real invariant risk. They are always reported as a separate category so nobody can hide a halt behind a definition.
 
 **Error budget policy (99.999% objective)**
@@ -998,7 +998,7 @@ Rules:
 ### 5.4 Measuring availability for the exit criterion
 
 1. **Freeze the definition first.** SLI, exclusions, attribution rules, vantage points and the measurement window are ratified in the rulebook by the end of Phase 2. No changes during the window.
-2. **Independent measurement.** Probes run from at least one independent point not operated by Concord (for example a member or a third-party monitoring provider). Measurement records are signed and written to the audit log.
+2. **Independent measurement.** Probes run from at least one independent point not operated by DepositX (for example a member or a third-party monitoring provider). Measurement records are signed and written to the audit log.
 3. **Independent attestation.** An external auditor performs a quarterly agreed-upon-procedures engagement on the availability report (Canadian standard for such engagements, verify).
 4. **Second-level resolution.** Downtime is counted in seconds, using the union of synthetic and real-traffic failures.
 5. **Complementary evidence.** Since two quarters cannot prove process capability, the exit also requires:
@@ -1063,13 +1063,13 @@ Today is 25 September 2026. Phase 0 starts in about a week.
 **Phase 0: Foundations (Q4 2026)**
 
 *Deliverables*
-- Concord Security Standard v0.1 and unified control framework (mapped to B-13, B-10, E-21, PFMI 8, 16, 17, ISO 27001 Annex A and SOC 2 criteria).
+- DepositX Security Standard v0.1 and unified control framework (mapped to B-13, B-10, E-21, PFMI 8, 16, 17, ISO 27001 Annex A and SOC 2 criteria).
 - Threat model v1 (this memo's tables, validated with founding banks' security teams).
 - Trust-zone reference architecture and network design.
 - Crypto and HSM decision memo: algorithm suite, FIPS 140-3 status, vendor shortlist, procurement started (D6).
 - Key management policy and ceremony design v0.
 - Incident response and severity model v0, communication protocol draft.
-- Concord CSP v0 outline and membership security schedule for rulebook v0.
+- DepositX CSP v0 outline and membership security schedule for rulebook v0.
 - Regulatory engagement plan for cyber and resilience topics with OSFI and BoC.
 - Legal question list to counsel (section 3.5).
 - Hire CISO-designate and SRE lead (D7).
@@ -1203,13 +1203,13 @@ Rough planning estimate (low confidence, plus or minus 50%): CAD 30 to 45 millio
 |---|---|---|---|---|---|
 | 1 | **Common-mode software defect** in consensus, ledger or contract shared by all validators (X1, B4) | Medium / Severe | Formal verification, two independent audits, shadow verifier, second client (Phase 4), staged activation, replay testing, fuzzing, deterministic simulation | Head of Platform with CISO | 1 to 4 |
 | 2 | **ZK or confidentiality-layer flaw** enabling undetectable inflation or leakage (X2, B5) | Medium / Severe | Independent cryptographer review, transparent setup preferred, supply reconciliation against bank core liabilities, designed fallback, PQ-hybrid encryption | CISO with Cryptography lead | 1 to 3 |
-| 3 | **Member endpoint compromise** leading to fraudulent mint or transfers (X3, B1, B3) | High / High | Concord CSP with annual attestation, K4 and K4b dual attestation, velocity caps and time-locks, freeze authority, anomaly detection | CISO, member CISOs | 0 to 3 |
+| 3 | **Member endpoint compromise** leading to fraudulent mint or transfers (X3, B1, B3) | High / High | DepositX CSP with annual attestation, K4 and K4b dual attestation, velocity caps and time-locks, freeze authority, anomaly detection | CISO, member CISOs | 0 to 3 |
 | 4 | **Operator insider or governance capture** (B2, X4) | Low to Medium / Severe | No unilateral authority, on-ledger multi-sig, time-locks, external log witnesses, single operator vote, f covers operator plus two banks | Board, CISO | 0 to 3 |
 | 5 | **Availability shortfall or correlated outage** (B6, X5) (single provider, carrier, misconfiguration, certificate expiry, DDoS) | High / High | Two-provider hosting, metro pair plus witness, diverse carriers, chaos programme, SLO ladder, change safety, certificate automation | Head of SRE | 1 to 4 |
 | 6 | **Supply-chain compromise** of build, dependency, HSM firmware or prover (B7) | Medium / Severe | Reproducible builds with two verifiers, multi-party signing, pinned and vendored dependencies, SBOM and VEX, firmware verification, vendor provenance checks | CISO | 1 to 4 |
 | 7 | **Governance deadlock or slow decision during an incident** (X4) | Medium / High | Pre-delegated bounded emergency powers, alternates for every signer, twice-yearly quorum drills, f+1 halt threshold, communication protocol | Board, Head of SRE | 0 to 3 |
 | 8 | **Key ceremony or custody failure** (lost shares, procedural error, custodian departure) (B3) | Medium / High | m-of-n with wide n, custodian diversity across banks, quarterly recovery rehearsal, independent attestation, escrowed recovery procedure | CISO | 1 to 3 |
-| 9 | **Halt handling failure** (halt not triggered, mis-triggered, weaponised, or banks unprepared) (B4, B6) | Medium / High | Scoped freeze first, f+1 halt threshold, twice-yearly drills with members and supervisors, Concord-off playbooks, cold-start rehearsal | Head of SRE | 1 to 3 |
+| 9 | **Halt handling failure** (halt not triggered, mis-triggered, weaponised, or banks unprepared) (B4, B6) | Medium / High | Scoped freeze first, f+1 halt threshold, twice-yearly drills with members and supervisors, DepositX-off playbooks, cold-start rehearsal | Head of SRE | 1 to 3 |
 | 10 | **Legal and regulatory perimeter gaps** (unclear oversight, finality basis, sovereignty, third-party-risk acceptance) cause banks to refuse onboarding (X6) | High / High | Early engagement with OSFI and BoC, counsel on section 3.5 questions, Canadian-controlled key custody, due-diligence pack on time, audit-rights schedule | Board, General Counsel, CISO | 0 to 3 |
 
 Watch list (not in the top 10 but tracked): scarce specialist talent (formal verification, ZK, HSM), schedule pressure eroding assurance, supervisory access abuse (X7), destructive attack on a member (X8), cryptographic obsolescence (X9), and burnout risk in a small 24/7 team.
@@ -1243,7 +1243,7 @@ What a large bank's third-party risk and security teams will ask for, and when w
 | 21 | Personnel security and insider-threat programme description | Q2 2027 | High |
 | 22 | Vulnerability disclosure policy and bug bounty terms | Private Q2 2027, public Q2 2028 | High |
 | 23 | Membership security schedule and audit-rights terms | With rulebook v0 (Q4 2026), refined Q2 2027 | High |
-| 24 | Concord CSP, attestation template, certification test suite | v0 Q4 2026, v1 Q3 2027 | High |
+| 24 | DepositX CSP, attestation template, certification test suite | v0 Q4 2026, v1 Q3 2027 | High |
 | 25 | SOC 2 Type I report | About February 2028 | Medium (verify auditor timeline) |
 | 26 | ISO 27001 certificate and Statement of Applicability | SoA draft Q4 2027, certificate Q2 to Q3 2028 | Medium |
 | 27 | SOC 2 Type II report | Q4 2028 if the window opens by January 2028, otherwise H1 2029 | Low to Medium |

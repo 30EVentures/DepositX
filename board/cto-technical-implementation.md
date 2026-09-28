@@ -1,4 +1,4 @@
-# Concord Network — CTO / Chief Architect Seat Memo: Technical Implementation
+# DepositX Network — CTO / Chief Architect Seat Memo: Technical Implementation
 
 Seat: Chief Technology Officer / Chief Architect, founding board
 Date: 25 September 2026
@@ -13,7 +13,7 @@ Status: Recommendation to the board. Decisions in section 0 require ratification
 
 | # | Decision | One-line rationale |
 |---|---|---|
-| D1 | **Build the ledger as a purpose-built, deterministic Rust state machine ("Concord Ledger Core") on a BFT engine (CometBFT first; engine swappable behind a `ConsensusHost` interface).** No general-purpose VM. Templates are native, reviewed, versioned modules. | The blueprint's own non-goals (no user-deployed contracts, reviewed templates only) mean a smart-contract VM is pure attack surface. Invariants I–III can live in a ~10 kLoC verified kernel rather than in userland contracts. |
+| D1 | **Build the ledger as a purpose-built, deterministic Rust state machine ("DepositX Ledger Core") on a BFT engine (CometBFT first; engine swappable behind a `ConsensusHost` interface).** No general-purpose VM. Templates are native, reviewed, versioned modules. | The blueprint's own non-goals (no user-deployed contracts, reviewed templates only) mean a smart-contract VM is pure attack surface. Invariants I–III can live in a ~10 kLoC verified kernel rather than in userland contracts. |
 | D2 | **Run a funded 10-week platform bake-off (custom vs Canton/Daml vs Besu QBFT) from 12 Oct to 18 Dec 2026, with hard pass/fail thresholds.** Plan B = Besu (schedule/staffing failure). Plan C = Canton (confidentiality failure). | Reasonable people pick Canton or Besu on schedule alone. The matrix is sensitive to how you weight time-to-testnet (section 1.3). I will not commit 9-figure money on a matrix; I want measurements. |
 | D3 | **Par is enforced in the state machine, not in contracts:** seven named invariants (P1–P7, section 2.3) checked at end of every block; graded halt (issuer quarantine vs network-wide halt). | Invariant I is "system-halting". The only place a halt is enforceable against a buggy or malicious contract is below the contract layer. |
 | D4 | **Confidentiality is a mode of the kernel, not a bolt-on.** Three modes: M0 plain (testnet, synthetic data only), M1 committed amounts (ZK: Pedersen + range proofs), M2 issuer domains (need-to-know two-tier ledger). M2 is fully designed now (section 3.4). The mode is chosen at Gate G1.2 (14 May 2027). Phase 3 does not depend on ZK. | This removes the blueprint's "largest technical bet" from the critical path and makes the fallback real. |
@@ -26,7 +26,7 @@ Status: Recommendation to the board. Decisions in section 0 require ratification
 
 **Decisions needed from other seats (blocking the design):**
 
-1. **Settlement anchor (Legal/Regulatory, BoC).** I need one of: A1, funds in a segregated Bank of Canada account mirrored by a Concord settlement position (my design); or A2, fully collateralised bilateral settlement with a default waterfall. My design supports both behind a `SettlementAsset` abstraction, but the legal answer changes the liquidity model. BoC participation is assumed, not confirmed (blueprint Known issue).
+1. **Settlement anchor (Legal/Regulatory, BoC).** I need one of: A1, funds in a segregated Bank of Canada account mirrored by a DepositX settlement position (my design); or A2, fully collateralised bilateral settlement with a default waterfall. My design supports both behind a `SettlementAsset` abstraction, but the legal answer changes the liquidity model. BoC participation is assumed, not confirmed (blueprint Known issue).
 2. **Token model (Product/Legal).** I recommend **Model X**: cross-issuer payment burns payer-issuer tokens and mints payee-issuer tokens, with issuer-to-issuer value moving as a settlement position. Payee ends up holding a claim on their own bank. **Model Y** (bearer tokens of issuer A circulating in bank B's wallets) creates cross-issuer exposure and changes CDIC attribution. I have designed for X; Y needs a separate design and I would resist it before Phase 4.
 3. **Leakage budget (Legal/Privacy).** An explicit table of which party class may see which field (section 3.1). I cannot choose between M1 and M2 without it.
 4. **Queued instruction wording (Rulebook).** Liquidity-saving netting requires a queue. The blueprint says "no partial/pending state". A queued instruction has debited nothing and is not yet a payment; the rulebook must say so.
@@ -45,7 +45,7 @@ Status: Recommendation to the board. Decisions in section 0 require ratification
 | **D. R3 Corda** | UTXO-like states, notary finality, need-to-know by design. | Canadian regulators know it from Project Jasper phases (verify). R3 licensing and strategy shifts (Corda 4 vs 5) are a vendor risk (verify). Throughput bounded by notary and flow model; hires shrinking. |
 | **E. Hyperledger Fabric** | Channels and private data collections, endorsement policies, pluggable ordering. | Raft ordering is crash-fault-tolerant only, so it violates the blueprint's BFT requirement; SmartBFT ordering arrived in Fabric 3.x (verify maturity). Cross-channel atomic swaps are hard, which fights "one liquidity space". |
 | **F. Move-based permissioned fork (Aptos/Diem lineage)** | Move language with the Move Prover; Block-STM parallel execution; HotStuff-family consensus. | Best-in-class native formal verification story and strong throughput claims. Vendor concentration (Aptos Labs), licence and fork-maintenance burden, no privacy story, small Canadian hiring pool (all verify). Runner-up for the *kernel language* idea, not for the platform. |
-| **G. Prior art as reference, not candidates** | Partior (multi-bank, permissioned, EVM-lineage, deposit mirroring); Kinexys / JPM Coin (bank-run, JPMD on a public L2 announced 2025 (verify)); Fnality (BoE-account-backed); Project Jasper (BoC/Payments Canada, Ethereum-lineage and Corda phases); BIS Project Agorá (verify BoC involvement). | Lessons taken: (1) the deposit token mirrors a ledger balance at the issuing bank; (2) single-bank or few-bank operation is the norm, and none of them is a 7-issuer, regulator-observed, formally verified rail, so I cannot claim a proven template for Concord's exact shape; (3) Canadian regulators have seen DLT DvP before. |
+| **G. Prior art as reference, not candidates** | Partior (multi-bank, permissioned, EVM-lineage, deposit mirroring); Kinexys / JPM Coin (bank-run, JPMD on a public L2 announced 2025 (verify)); Fnality (BoE-account-backed); Project Jasper (BoC/Payments Canada, Ethereum-lineage and Corda phases); BIS Project Agorá (verify BoC involvement). | Lessons taken: (1) the deposit token mirrors a ledger balance at the issuing bank; (2) single-bank or few-bank operation is the norm, and none of them is a 7-issuer, regulator-observed, formally verified rail, so I cannot claim a proven template for DepositX's exact shape; (3) Canadian regulators have seen DLT DvP before. |
 
 ### 1.2 Decision matrix
 
@@ -210,7 +210,7 @@ Payer account at issuer A pays payee account at issuer B amount x:
 
 **DvP.** Same mechanism with a security leg: `{securities: seller -> buyer, cash: buyer -> seller}`. Two cases:
 
-- *Bond token native on Concord* (Phase 3 tokenised-bond integration): fully atomic in one block.
+- *Bond token native on DepositX* (Phase 3 tokenised-bond integration): fully atomic in one block.
 - *Bond held at an external CSD (CDS)*: **not atomic on-ledger**, and I will not pretend it is. The cash leg is an `Escrow`/`PayOnEvent` template released by a signed CSD confirmation (sese.025) from a registered event-oracle key, with a deadline and a refund path. That gives conditional, not atomic, DvP, with a defined residual risk window. No bridge; the oracle is a bank-grade attestation gateway. (verify CDS interface and ISO 20022 readiness.)
 
 **PvP.** Same-currency inter-issuer swaps are already `Convert`. True cross-currency PvP is a Phase 4 problem between two separate BFT networks; atomicity across networks needs a timelock protocol or a trusted coordinator or light-client-verified relay. I defer the design and flag it (verify); it is not on the 2027–2028 critical path.
@@ -249,7 +249,7 @@ Payer account at issuer A pays payee account at issuer B amount x:
 
 ### 2.6 L3: Liquidity-saving netting and settlement positions
 
-**Why settlement positions exist.** A cross-issuer payment is a par claim of B on A. Invariant II (legal and technical finality in one instant) means that claim must be discharged *at that instant*, in central-bank-anchored value. Therefore each issuer holds a **prefunded settlement position** SP_i on Concord that is backed 1:1 by the anchor (A1: a segregated BoC balance; A2: collateral). Cross-issuer payments move SP; no payment ever creates an unsecured interbank exposure. This is my most important structural addition to the blueprint; the blueprint names the anchor but does not define how 24/7 flows interact with an anchor that operates on Lynx business hours (Lynx is not 24/7; verify hours).
+**Why settlement positions exist.** A cross-issuer payment is a par claim of B on A. Invariant II (legal and technical finality in one instant) means that claim must be discharged *at that instant*, in central-bank-anchored value. Therefore each issuer holds a **prefunded settlement position** SP_i on DepositX that is backed 1:1 by the anchor (A1: a segregated BoC balance; A2: collateral). Cross-issuer payments move SP; no payment ever creates an unsecured interbank exposure. This is my most important structural addition to the blueprint; the blueprint names the anchor but does not define how 24/7 flows interact with an anchor that operates on Lynx business hours (Lynx is not 24/7; verify hours).
 
 **Funding and defunding.** Issuer treasury moves value between its Lynx account and its SP during anchor hours via `camt.050` (LiquidityCreditTransfer), confirmed with `camt.054`; the BoC-observer anchor gateway signs `AnchorAttestation{per-issuer balances, as-of}`. P4 ties them together. Weekend and overnight risk: SP can run dry when the anchor is closed. Mitigations: per-issuer minimum-buffer policy enforced as an alert at 30% of trailing-week peak outflow; LSM (below); a rulebook item for an intraday/weekend liquidity facility (Legal/BoC) (verify what BoC allows).
 
@@ -296,9 +296,9 @@ Principle from the blueprint's data model: identity and KYC evidence stay off-le
 
 ### 2.10 L5: ISO 20022 message mapping
 
-Canonical internal model is a Protobuf `ConcordInstruction`; ISO 20022 is a translator library (XSD plus Schematron business rules, golden-file tested), version-pinned per usage guideline. Versions (`.08` vs `.10` vs `.12`) and the Payments Canada HVPS+/Lynx usage guidelines are to be confirmed (verify).
+Canonical internal model is a Protobuf `DepositXInstruction`; ISO 20022 is a translator library (XSD plus Schematron business rules, golden-file tested), version-pinned per usage guideline. Versions (`.08` vs `.10` vs `.12`) and the Payments Canada HVPS+/Lynx usage guidelines are to be confirmed (verify).
 
-| Concord event | ISO 20022 message | Notes |
+| DepositX event | ISO 20022 message | Notes |
 |---|---|---|
 | Corporate initiates payment / conditional payment | `pain.001.001.11` CustomerCreditTransferInitiation | Conditions carried in `SplmtryData`; mapped to T1/T2/T5 |
 | Cross-issuer customer transfer instruction (issuer-to-issuer wire form) | `pacs.008.001.xx` FIToFICustomerCreditTransfer | Debtor, creditor, agents, UETR (idempotency); regulatory data for Travel Rule |
@@ -463,7 +463,7 @@ Polyglot cost is real and acknowledged: it is the price of not forcing 7 banks' 
 ### 4.2 Monorepo layout
 
 ```
-concord/
+depositx/
   spec/              English invariant charter; TLA+ models; Lean 4 reference model
   kernel/            Rust workspace: par-kernel (verified), templates, amounts, state, crypto-abstraction
   node/              Rust validator + observer, ConsensusHost, cometbft shim
@@ -586,7 +586,7 @@ If the core cannot post 24/7, the adapter's own **durable outbox and shadow cont
 | **T2** | Issuers with own integration | Own gateway, adapter, compliance service, TDS, full (non-voting) node | 9–12 months for a large bank |
 | **T3** | Voting-validator issuers | T2 plus HSM-backed validator in an assigned failure domain | 12–15 months for a large bank, of which most is *bank-internal* change control, security review and core integration |
 
-**Certification stages:** (1) *Connect*: PKI, network, HSM, health checks. (2) *Functional conformance*: the Concord Conformance Suite (target ~400 scripted scenarios covering every template, ISO 20022 message, error code and reconciliation path, results cryptographically signed and submitted). (3) *Resilience*: scripted failure injection by the operator (kill adapter mid-mint, drop MQ, core-DR replay, gateway overload) with pass/fail on invariants. (4) *Security and third-party risk*: penetration test, evidence pack for the bank's own third-party-risk and technology-risk governance (OSFI B-10, B-13, E-21; verify current versions and effective dates), SOC reports. (5) *Operational readiness*: runbooks, on-call, one DR drill, and a rehearsal of the halt/quarantine/resume procedure.
+**Certification stages:** (1) *Connect*: PKI, network, HSM, health checks. (2) *Functional conformance*: the DepositX Conformance Suite (target ~400 scripted scenarios covering every template, ISO 20022 message, error code and reconciliation path, results cryptographically signed and submitted). (3) *Resilience*: scripted failure injection by the operator (kill adapter mid-mint, drop MQ, core-DR replay, gateway overload) with pass/fail on invariants. (4) *Security and third-party risk*: penetration test, evidence pack for the bank's own third-party-risk and technology-risk governance (OSFI B-10, B-13, E-21; verify current versions and effective dates), SOC reports. (5) *Operational readiness*: runbooks, on-call, one DR drill, and a rehearsal of the halt/quarantine/resume procedure.
 
 **Wave plan.** Wave A: 2 pilot banks in Phase 1; Wave B: 2 more by mid-Phase 2 (4 issuers live in the pilot); Wave C: banks 5–7 in Phase 3. For all seven to be live in H2 2028, banks 3–7 must **start** integration by Q3 2027 and staff their T2/T3 work (5–8 engineers each) from then. Bank change-freeze calendars around year-end and parallel programmes (Real-Time Rail, verify current timing; ISO 20022 and regulatory changes) are the most likely source of slippage.
 
@@ -752,7 +752,7 @@ Pods (per the blueprint): **Ledger**, **Settlement**, **Compliance**, **Integrat
 **Exit tests.**
 
 1. Perf-environment **Table 2 certification**: 5,000/s sustained 6 h, burst 20,000/s for 60 s, median < 2 s, p99 < 5 s with 3 validators killed mid-run; zero invariant violations.
-2. All founding issuers live and certified at T3; >= 95% of eligible wholesale interbank flow *settle-able* on Concord (capability, not adoption).
+2. All founding issuers live and certified at T3; >= 95% of eligible wholesale interbank flow *settle-able* on DepositX (capability, not adoption).
 3. Supervisory query < 60 s on >= 1B-record production-scale data.
 4. Availability measured against the re-baselined SLO (99.99%) over the first 90 days; the 99.999% design target validated for single-fault scenarios in drills.
 5. LSM: demonstrated liquidity saving on replayed anonymised Lynx data (target >= 30%, verify), zero atomicity violations in 10M queued instructions.

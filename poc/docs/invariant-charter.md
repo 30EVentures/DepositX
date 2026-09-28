@@ -1,6 +1,6 @@
 # Invariant Charter (proof-of-concept edition)
 
-The seven invariants of the Concord ledger kernel, stated precisely, with the code that enforces each and
+The seven invariants of the DepositX ledger kernel, stated precisely, with the code that enforces each and
 the evidence that checks it. This is the PoC counterpart of the CTO memo's epic E0.2. The TLA+ version is
 **not written**: no Java runtime is installed here, so nothing could be machine-checked. The Node model
 checker (`src/modelcheck.js`) plays that role for now.

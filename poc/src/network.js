@@ -111,7 +111,7 @@ export class Network {
     for (const i of ISSUERS) K.validators[i.id] = genKey();
     this.K = K;
     this.genesis = {
-      chainId: 'concord-poc',
+      chainId: 'depositx-poc',
       params: { maxTx: '500000000' }, // $5,000,000.00 per instruction (capped pilot)
       issuers: ISSUERS.map((i) => ({ id: i.id, name: i.name, keys: Object.fromEntries(Object.entries(K.issuers[i.id]).map(([k, v]) => [k, v.pub])) })),
       governance: { operator: K.gov.operator.pub, neutral: K.gov.neutral.pub },
@@ -195,7 +195,7 @@ export class Network {
   tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId } = {}) {
     const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, sigs: {} };
     // sign using the same canonical message the kernel verifies
-    const msg = canon({ d: 'concord-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until });
+    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
   }
@@ -439,7 +439,7 @@ export class Network {
   }
 
   // External-CSD DvP (roadmap 4.2, 02-technical-implementation.md section 2.4): the bond
-  // lives at an outside depository, so only the cash leg is on Concord - a correctly-
+  // lives at an outside depository, so only the cash leg is on DepositX - a correctly-
   // configured Escrow (1.1) gated on the dedicated csd-confirmation oracle (1.2), not a
   // new kernel mechanism. The residual risk window - funds locked, trade not yet final -
   // is exactly [now, now + deadlineSeconds]: eventRelease can confirm it at any point up
