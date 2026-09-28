@@ -104,7 +104,7 @@ export class Network {
     K.gov.neutral = genKey();
     K.observer = genKey(); // Bank of Canada supervisory node (non-voting)
     K.anchor = genKey(); // anchor gateway
-    K.event = { delivery: genKey(), inspection: genKey() }; // PayOnEvent (T5) named oracles
+    K.event = { delivery: genKey(), inspection: genKey(), 'csd-confirmation': genKey() }; // PayOnEvent (T5) named oracles
     K.rec.operator = genKey();
     K.rec.observer = K.observer; // the observer can also pull the fire alarm
     K.validators.operator = genKey();
@@ -436,6 +436,19 @@ export class Network {
     const block = this.submit([this.tx('BATCH', { legs: legTxs }, [])]);
     this.pumpCore();
     return this.#res(block, { stage: 'batch' });
+  }
+
+  // External-CSD DvP (roadmap 4.2, 02-technical-implementation.md section 2.4): the bond
+  // lives at an outside depository, so only the cash leg is on Concord - a correctly-
+  // configured Escrow (1.1) gated on the dedicated csd-confirmation oracle (1.2), not a
+  // new kernel mechanism. The residual risk window - funds locked, trade not yet final -
+  // is exactly [now, now + deadlineSeconds]: eventRelease can confirm it at any point up
+  // to expiry, escrowRefund can close it once the deadline has passed.
+  externalCsdDvp(buyer, seller, escrowId, cash, { deadlineSeconds = 3600 } = {}) {
+    return this.escrowLock(buyer, seller, escrowId, cash, { expiresAt: this.now() + deadlineSeconds, eventName: 'csd-confirmation' });
+  }
+  csdConfirm(escrowId) {
+    return this.eventRelease(escrowId, 'csd-confirmation');
   }
 
   fund(issuer, amt) {
