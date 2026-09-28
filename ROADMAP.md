@@ -240,6 +240,66 @@ stated purpose ("a live dashboard").
       accurately describes what `poc/` covers.
 - [x] No claim is added anywhere that isn't backed by a passing test.
 
+## Priority 4 — M2 confidentiality (issuer-domain need-to-know)
+
+Continued 2026-09-28. Grounded in `02-technical-implementation.md` T-6 and
+§2.6: three confidentiality modes are specified — **M0** plain (today's PoC:
+everyone sees every issuer's full customer book), **M1** ZK committed amounts
+(needs real cryptographic review; correctly out of scope, see below), and
+**M2** issuer-domain need-to-know, which the spec says is "fully designed and
+prototyped in Phase 1" and is "the fallback that Phase 3 ships on if M1
+fails" (§2.6 table). M2 is **not cryptographic** — it is an access-control
+question (who is shown what), not a hiding-in-the-math one, so unlike M1 it
+needs no new dependency and no crypto review to prototype at PoC scale.
+
+### [ ] 4.1 A confidentiality view: issuers see their own book, not each other's
+
+**Design.** A pure function over the existing `snapshot()` output — the
+kernel and its invariants are completely unchanged; this is a rendering
+question, not a settlement one. Two viewer kinds: `{ issuer: 'MPL' }` (sees
+full customer-level detail — names, deposits, tokens — for its own issuer
+only; every other issuer is reduced to `{ id, name, status, quarantine }`,
+since knowing whether a counterparty is safe to pay is operationally
+necessary but its book is not); `{ supervisor: true }` (the Bank of Canada
+observer / operator view: everything, unredacted, matching the invariant
+charter's existing "supervisory 60-second claim"). An unrecognised issuer id
+is treated as an outside party and sees no issuer's book in detail.
+
+**Depends on:** nothing new; reads `Network#snapshot()`'s existing output.
+
+**Acceptance criteria**
+- [ ] A supervisor view is byte-identical to today's full `snapshot()` — M2
+      changes what a bank sees, never what the Bank of Canada observer sees.
+- [ ] An issuer view shows full customer detail (names, deposits, token
+      balances) for its own issuer, and for every other issuer shows only
+      `id`, `name`, `status`, `quarantine` — no customers array, no S/L/sp/
+      core figures.
+- [ ] Two different issuers' views of the identical underlying state disagree
+      about what is visible (MPL's view hides NSR's book; NSR's view hides
+      MPL's) — proving this is genuine per-viewer confidentiality, not a
+      global toggle.
+- [ ] A quarantined or halted issuer's status is visible in every view,
+      including to issuers that cannot see its book — the point made in the
+      design note (a payer must be able to route around a bad counterparty
+      without seeing its balance sheet).
+- [ ] Building a view never mutates the network: calling it twice, or
+      alongside an ordinary full `snapshot()`, produces the same real state
+      each time (a test using the same live `Network` instance confirms this,
+      not just that the view function is theoretically pure).
+- [ ] `GET /api/state` gains a `?viewAs=<issuerId|supervisor>` parameter
+      (default `supervisor`, so today's dashboard behaviour is unchanged
+      unless asked for something else) and the dashboard gains a control to
+      pick which issuer's seat you are viewing from, labelled honestly as a
+      confidentiality demo, not a login.
+- [ ] Not model-checked: M2 is a read-only view transform outside the
+      transaction path, so it cannot itself create an invariant violation —
+      recorded as the reasoning in `docs/invariant-charter.md`, not silently
+      skipped.
+- [ ] `poc/docs/invariant-charter.md` and `poc/README.md`'s "What it is NOT"
+      both updated: M2 is now built and demoed; M1 (real ZK) and HSMs remain
+      correctly out of scope.
+- [ ] `npm test` stays green; new tests in `test/confidentiality.test.js`.
+
 ## Blocked / needs input
 
 *(Populated during the loop if something needs a decision only Caleb can
@@ -247,12 +307,13 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 ## Not in this roadmap (explicitly out of scope for a coding loop)
 
-- Real BFT consensus, a Rust kernel port, real ZK confidentiality (M1), HSM
-  integration, a real core-banking connector, PvP/cross-currency — all
+- Real BFT consensus, a Rust kernel port, real ZK confidentiality (**M1**),
+  HSM integration, a real core-banking connector, PvP/cross-currency — all
   correctly flagged as out of scope in `poc/README.md`'s "What it is NOT" and
   gated behind spikes S1–S10 in `02-technical-implementation.md`, which need
   real infrastructure, real cryptographic review, or real bank
-  counterparties, not another coding pass.
+  counterparties, not another coding pass. (**M2**, the access-control
+  confidentiality mode, is different and is Priority 4 above.)
 - Anything in `00`–`04` and `board/*.md`: regulator meetings, board votes,
   legal opinions, bank onboarding — business and regulatory work, not code.
 
