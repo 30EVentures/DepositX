@@ -6,14 +6,16 @@ import { KernelError, Ledger } from '../src/kernel.js';
 test('model check: every state reachable within 5 actions (incl. a slow core, attacks, and the four new templates) satisfies all safety and liveness properties', () => {
   // Extended (roadmap 2.1) to cover Escrow, PayOnEvent, Batch and Sweep: 37 actions (was 27),
   // a second same-issuer account so same-issuer Escrow/Sweep have somewhere to move to, and
-  // escrows/sweeps included in the state key. Measured empirically (see docs/invariant-charter.md
-  // for the honest before/after numbers) rather than assumed - do not lower these thresholds to
-  // make a future change look green; a real regression in reachable coverage should fail this.
+  // escrows/sweeps included in the state key. Extended again (roadmap 4.3) to 40 actions for
+  // External-CSD DvP (roadmap 4.2), in combination with everything above, not just in isolation.
+  // Measured empirically (see docs/invariant-charter.md for the honest before/after numbers)
+  // rather than assumed - do not lower these thresholds to make a future change look green; a
+  // real regression in reachable coverage should fail this.
   const r = modelCheck({ maxDepth: 5, maxStates: 5000 });
   assert.deepEqual(r.failures, []);
-  assert.equal(r.actions, 37);
-  assert.ok(r.states > 3400, `explored ${r.states} states`);
-  assert.ok(r.transitions > 34000, `explored ${r.transitions} transitions`);
+  assert.equal(r.actions, 40);
+  assert.ok(r.states > 3600, `explored ${r.states} states`);
+  assert.ok(r.transitions > 39000, `explored ${r.transitions} transitions`);
   assert.ok(r.quiescentChecks >= r.states - r.states * 0.75);
 });
 

@@ -79,6 +79,26 @@ count (3,560) than a shallow run of the old alphabet would; CI time matters more
 old run's depth number exactly. The depth-6 run above is the honest "we went deeper once and
 still found nothing" data point the roadmap asked for - it is not re-run automatically.
 
+## Model checker: External-CSD DvP added (roadmap 4.3, 2026-09-28)
+
+The action alphabet grew again, 37 to **40**: `externalCsdDvp` (a fixed small cash-only lock,
+`csd1`, cross-issuer acme -> cedar), the matching correct `csdConfirm`, and a wrong-event-name
+release reclassified as an **attack** (claiming the CSD escrow is actually the generic `delivery`
+event). Unlike M1's escrow/event-release actions, these do not exercise new kernel code -
+`externalCsdDvp`/`csdConfirm` are the same `tx_ESCROW_LOCK`/`tx_EVENT_RELEASE` handlers already
+covered - but they exercise that mechanism **in combination** with sweeps, batches and every other
+action reachable from the same states for the first time, which is the actual point of exhaustive
+search over scripted scenarios. No new mutation test was added for this: a bug in the shared
+`tx_ESCROW_LOCK`/`tx_EVENT_RELEASE` code is already caught by the existing escrow-prints-money and
+wrong-oracle mutations (roadmap 2.2) regardless of which named convenience method called it, and
+both of those mutations still pass with the extended alphabet (confirmed, not assumed).
+
+| Run | Actions | Depth | States | Transitions | Time | Failures |
+|---|---|---|---|---|---|---|
+| After 2.1 (previous baseline) | 37 | 5 | 3,560 | 36,556 | ~27 s | 0 |
+| After 4.3, routine (`modelcheck.test.js`, every test run) | 40 | 5 | 3,793 | 40,680 | ~31 s | 0 |
+| After 4.3, one-off deeper check (this update, not part of the routine suite) | 40 | 6 | 13,673 | 151,720 | 116.9 s | 0 |
+
 ## Roadmap 4.1: M2 confidentiality is deliberately not model-checked
 
 `confidentialView` (`src/network.js`) is a pure, read-only transform of `Network#snapshot()`'s

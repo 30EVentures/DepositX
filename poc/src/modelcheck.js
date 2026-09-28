@@ -94,6 +94,13 @@ export const ACTIONS = [
   // path from as many reachable states as possible.
   { name: 'register sweep s1 (acme -> harbour, keep $0)', kind: 'legit', run: (net) => net.registerSweep('s1', 'MPL:acme', 'MPL:harbour', 0n) },
   { name: 'cancel sweep s1', kind: 'legit', run: (net) => net.cancelSweep('s1') },
+  // External-CSD DvP (roadmap 4.2): a correctly-configured composition of Escrow + PayOnEvent
+  // under a dedicated oracle - reuses the mechanism the escrow/event-release actions above
+  // already exercise in isolation, but not yet in COMBINATION with sweeps, batches and attacks
+  // reachable from the same states. 'csd1' is a separate id from 'e1'/'e2', so no collision.
+  { name: 'external-CSD DvP lock csd1 (acme -> cedar) $1', kind: 'legit', run: (net) => net.externalCsdDvp('MPL:acme', 'NSR:cedar', 'csd1', dollars(1), { deadlineSeconds: 60 }) },
+  { name: 'csd confirm csd1 (correct oracle)', kind: 'legit', run: (net) => net.csdConfirm('csd1') },
+  { name: 'ATTACK csd confirm csd1 with the delivery oracle', kind: 'attack', run: (net) => net.eventRelease('csd1', 'delivery') },
   // Batch (T7): two independently-valid legs in one atomic instruction. Deliberately NOT a
   // mirrored pair ($1 then $2, not $1 then $1): a same-amount round trip would make the second
   // leg's settlement-position requirement always exactly satisfied by the first leg's own
