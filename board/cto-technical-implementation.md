@@ -836,7 +836,7 @@ Additional risks tracked but not top 10: sanctions evasion through confidentiali
 14. SOC 2 Type II observation-period requirements for a new operator; availability of Canadian cryptography-audit capacity in the required window.
 15. Availability and licensing of a Canadian-resident public bug-bounty platform.
 
-**Open questions for the board:** the neutral validator seat (who); whether the BoC will ever want a voting seat; the leakage budget; Model X vs Model Y; A1 vs A2 anchor; who owns the reference adapter's long-term maintenance (operator or a bank consortium); whether the founders accept a 99.99% contractual SLO and a Phase 3b.
+**Open questions for the board:** the neutral validator seat (who); whether the BoC will ever want a voting seat; the leakage budget; Model X vs Model Y; A1 vs A2 anchor; who owns the reference adapter's long-term maintenance (operator or a bank consortium); whether the founders accept a 99.99% contractual SLO and a Phase 3b; **whether an institution's own authenticated software agent initiating an instruction (e.g. an automated treasury sweep) under that institution's existing validator keys should be indistinguishable from a human-initiated instruction at every layer except L4's audit log, which should record caller type. This is not a new access class or a weaker perimeter — L5 access, as actually specified, does not distinguish "human at a terminal" from "software calling the same authenticated API" today, and it should say so explicitly rather than by omission.**
 
 ---
 

@@ -2,6 +2,8 @@
 
 Board-reviewed roadmap and technical implementation for the DepositX tokenized-deposit settlement network (Canada), built from the KPMG Blueprint v0.9 (2 Sep 2026).
 
+**Positioning.** DepositX is not a standalone bank rail — it is one piece of infrastructure for the agentic internet: a settlement and verification layer that autonomous agents (as well as banks and their human treasurers) can transact against, natively. The par invariants (P1–P7), the offline-verifiable finality receipts, and the machine-callable JSON action API in [poc/](poc/README.md) already make the ledger's state independently checkable by any authenticated caller — human or software — without trusting a dashboard. That is deliberate: as institutions increasingly delegate treasury operations to software agents, "who can call this network and how is their action verified" is as load-bearing a design question as par itself. Where the current blueprint and board memos assume the caller is always a human at a bank terminal (see `02` §2.2 L5 and the open-questions sections added to each seat memo), that is flagged as a real gap to resolve, not a settled design.
+
 **Status: proposed, not ratified.** Six AI-simulated board seats reviewed the blueprint; `00` records where they agreed, where they disagreed, and how the disagreement was resolved. Legal, regulatory, accounting and financial content is a workplan for real counsel and real bank executives to validate, not advice. Unverified facts are marked **[V]**.
 
 ## Read in this order

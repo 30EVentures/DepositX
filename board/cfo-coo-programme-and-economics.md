@@ -1104,6 +1104,7 @@ Likelihood and impact on a 1 to 5 scale. Exposure in dollars or months of delay 
 6. Insurance capacity and pricing for an FMI-grade ledger operator.
 7. Analogue programme timelines (Lynx, Real-Time Rail, Fnality).
 8. Whether the Bank of Canada will operate an observer node, and in what form settlement-anchor access is available.
+9. *(Added by the operator, not a CFO finding.)* Whether the demand model (§2) accounts for agent-driven volume separately from human-initiated volume — Rung 1's 24/7 treasury sweeps are inherently software-triggered, not human clicks, and as institutions automate more treasury flows through their own agents, transaction frequency may decouple from headcount-based demand estimates.
 
 ### 8.3 What I need from other seats
 

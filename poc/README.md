@@ -6,6 +6,15 @@ Escrow/PayOnEvent/Batch/Standing-Sweep (the spec's full Phase 1+2 template launc
 liquidity-saving netting, the seven par invariants (P1–P7), and the graded halt
 (quarantine one issuer vs halt the network). Zero dependencies; Node 20+.
 
+The dashboard is a human-convenience shell, not the primary interface: every button in
+`public/index.html` calls the same `GET /api/state` / `POST /api/action` JSON API that any
+other caller — a script, a test, or an autonomous agent — can call directly (see `curl`
+examples below and the ISO 20022 endpoints). That's deliberate: state is machine-readable
+and independently verifiable (offline-checkable finality receipts, replayable block log)
+before it is human-readable, not the other way around. See "What it is NOT" for what this
+doesn't yet cover — there's no per-caller identity distinct from "holds a valid key," so a
+human and a software agent using the same institutional key are indistinguishable today.
+
 ```
 cd ~/DepositX/poc
 npm test                                  # 60 tests (~45 s)
@@ -56,6 +65,7 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 - **Toy core banking.** The bank simulator is a few dozen lines; real cores are the hard part (see the onboarding playbook).
 - **Simplifications:** account IDs are readable (`MPL:acme`), not hashed commitments; one screening key per bank; the anchor is a mock; time is supplied per block.
 - The benchmark measures one validator's execution stage on one core with everything signed and verified. It is an upper bound, not end-to-end finality.
+- **No caller-type distinction.** The action API authenticates by key, not by whether the caller is a human clicking the dashboard or a script/agent calling the same endpoint — matching the real design gap flagged in `02-technical-implementation.md` §10 and the board memos' open-items registers, not yet resolved here either.
 
 ## Files
 

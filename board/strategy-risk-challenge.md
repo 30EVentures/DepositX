@@ -357,6 +357,7 @@ Banks earn on deposit spread. A token that makes corporate deposits more mobile 
 | A-38 | Brand line: "settles in under two seconds with legal finality" | **Unsupported** | Legal finality unestablished (A-5); the line is in the brand voice guide as a preferred phrase | "Reaches consensus finality in under two seconds (median, measured). Legal finality per the rulebook." Reissue only when evidence permits |
 | A-39 | Premise text: "without ever breaking par" | **Doubtful** | Absolute claim | "Built so every token remains redeemable at par at its issuing bank" |
 | A-40 | Threat model completeness | **Doubtful** | Omits settlement-asset failure, participant insolvency, weekend run, and liability allocation | Add R1, L2, O4, L1 to the threat model |
+| A-41 *(added by the operator, not the original red-team pass)* | A-25's "bank-hosted wallets; no direct customer access" implicitly assumes the party acting through that wallet/API is a human | **Plausible, with a live gap** | Rung 1 of the use-case ladder (§8) is 24/7 automated treasury sweeps — that is already software, not a human clicking a portal at 3am. The perimeter (bank-hosted, institution-keyed) is unaffected either way; what's undefined is whether the compliance/audit-trail model distinguishes agent-initiated from human-initiated instructions under the same key | Keep the perimeter as designed. Add a caller-type field to the audit log and compliance screening (CTO §10, CISO §8, Legal Appendix A) so the distinction is explicit rather than assumed away |
 
 ---
 

@@ -69,6 +69,7 @@ DepositX is a **permissioned settlement network on which regulated Canadian depo
 - PCSA designation route, section numbers and timing; FINTRAC's treatment of deposit tokens; capital and liquidity treatment (press reports of "Group 1a" not found in OSFI's text).
 - Real-Time Rail value limits and settlement design; Lynx hours; Canadian volume data (the demand model depends on it).
 - All performance figures in `02` are planning estimates until the spikes S1–S10 run.
+- **Whether an instruction initiated by a member institution's own software agent (not a human at a terminal) is authenticated, screened and audit-logged identically to one a human initiates under the same institutional key.** Not previously asked by any seat. See `02` §10 and the open items added to `board/cto-technical-implementation.md`, `board/legal-regulatory.md` and `board/ciso-security-resilience.md`.
 
 Each seat memo carries its own verification register; these are the ones that block decisions.
 

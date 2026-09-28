@@ -114,3 +114,4 @@ Each rung has a **pre-registered baseline and a stop rule**; discovery must conf
 6. Commission the independent accounting and regulatory-treatment paper and open the OSFI/CDIC/BoC feedback channel.
 7. Confirm the prefunded settlement position as the working anchor assumption so Treasury/ALM work can start.
 8. Commission the competition-law protocol for all councils and clean teams.
+9. Define, in the objective admission criteria (§2), whether and how a member institution authorizes its own software agents (treasury automation, not a new participant tier) to initiate instructions under its existing validator identity and keys — and whether the BDDP and certification suite need an agent-specific control (caller-type attribution in the audit trail), given that Rung 1 of the use-case ladder (§8, 24/7 treasury sweeps) is inherently an agent-driven flow, not a human clicking a portal at 3am.

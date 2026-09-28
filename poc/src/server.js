@@ -1,5 +1,7 @@
 // Local demo server: static dashboard + JSON API + server-sent events. No dependencies.
 // Binds to 127.0.0.1 only: this is a demonstration, not a service.
+// The dashboard is one caller of /api/state and /api/action, not a privileged one - any
+// script or agent with network access to this process can call the same two endpoints.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1275,3 +1275,4 @@ What a large bank's third-party risk and security teams will ask for, and when w
 12. Whether wholesale demand justifies 5,000 sustained instructions per second (demand model needed).
 13. Whether the chosen confidentiality scheme needs a trusted setup (undecided in the blueprint).
 14. Cost estimates in section 6.4 (planning estimates only).
+15. **Added by the operator:** whether the signed audit log (§5.1) and the compliance-screening model need a caller-type field so a supervisory query can distinguish a human-initiated instruction from one initiated by a member institution's own authenticated software agent acting under the same keys — trust and verification of the *caller*, not just the transaction, is a real requirement as agentic treasury automation grows, not a hypothetical.

@@ -803,6 +803,7 @@ Nothing below should be treated as established. Each item needs an owner and a d
 | V14 | Each bank's fiscal year-end, freeze periods and change calendar | Release scheduling | Member Success, per bank |
 | V15 | Consensus behaviour: staged validator promotion and demotion; validator-set size cap (~15 assumed); n = 3f+1 arithmetic and count of live validators needed for production | Wave plan, admission criteria | Platform & Ledger pod |
 | V16 | HSM certification level, bank policy equivalents | Minimum validator standard | Security & SRE pod |
+| V17 | *(added by the operator, not a seat finding)* Whether the objective admission criteria and the BDDP need a control for member-authorized software agents initiating instructions (Rung 1's 24/7 treasury sweeps, §8, are inherently agent-driven) — same institutional key and authority, but the audit trail should say caller type | Certification suite design, TPRM questionnaire | Onboarding, Security & SRE pods |
 
 ## Appendix B. Dependencies on other seats
 

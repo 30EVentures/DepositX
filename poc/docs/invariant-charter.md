@@ -5,6 +5,11 @@ the evidence that checks it. This is the PoC counterpart of the CTO memo's epic 
 **not written**: no Java runtime is installed here, so nothing could be machine-checked. The Node model
 checker (`src/modelcheck.js`) plays that role for now.
 
+Why this document exists in this form: an invariant a human has to trust a UI to believe in isn't really
+an invariant. Every row below is checkable by re-running the code cited in "Checked by," independent of
+the dashboard, of who's asking, and of whether the asker is a person or another program — that's the
+actual point of a machine-verifiable charter, not a nicety.
+
 **Notation.** For issuer *i*: `S_i` token supply (sum of account balances); `M_i`/`B_i` cumulative minted/
 burned; `In_i`/`Out_i` cumulative converted in/out; `L_i` last attested core control balance; `H_i` open
 mint holds; `R_i` pending core debits (redemptions and convert-outs); `P_i` pending core credits
