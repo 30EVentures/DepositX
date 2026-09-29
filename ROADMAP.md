@@ -489,11 +489,11 @@ caller uniformity) is deferred.
 - [x] Omitting all agent signatures leaves every existing test, stored block and
       replay byte-identical (no migration; `grants` absent from state until used).
 
-### [ ] 6.2 Interface an agent can actually use
-- [ ] `POST /api/submit` accepts a fully signed instruction (server never signs).
-- [ ] `GET /api/schema` lists instruction types, roles, payload shapes and an
+### [x] 6.2 Interface an agent can actually use
+- [x] `POST /api/submit` accepts a fully signed instruction (server never signs).
+- [x] `GET /api/schema` lists instruction types, roles, payload shapes and an
       error catalog with `retryable` / `remedy`.
-- [ ] `GET /api/grants` shows grants and remaining window headroom.
+- [x] `GET /api/grants` shows grants and remaining window headroom.
 
 ### [ ] 6.3 Model-check delegation (S6) and mutation-test it
 - [ ] Safety property S6 (delegation soundness) and new actions in `modelcheck.js`.

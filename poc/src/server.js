@@ -102,6 +102,14 @@ http
         const viewer = viewAs && ['MPL', 'NSR', 'LKS'].includes(viewAs) ? { issuer: viewAs } : { supervisor: true };
         return json(res, 200, confidentialView(net.snapshot(), viewer));
       }
+      // Roadmap 6.2: the agent-facing interface. /api/schema and /api/grants are read-only;
+      // /api/submit takes an instruction the CALLER signed - the server never signs on this path.
+      if (req.method === 'GET' && url.pathname === '/api/schema') return json(res, 200, Network.schema());
+      if (req.method === 'GET' && url.pathname === '/api/grants') {
+        const iss = url.searchParams.get('issuer');
+        if (iss && !['MPL', 'NSR', 'LKS'].includes(iss)) return json(res, 400, { ok: false, error: 'BAD_REQUEST', message: 'bad issuer' });
+        return json(res, 200, net.grantsView(iss || undefined));
+      }
       if (req.method === 'GET' && url.pathname === '/api/verify') return json(res, 200, net.verifyReplay());
       if (req.method === 'GET' && url.pathname === '/api/bench') return json(res, 200, bench({ n: 20000 }));
       if (req.method === 'GET' && url.pathname === '/events') {
@@ -126,6 +134,23 @@ http
       if (req.method === 'GET' && url.pathname === '/api/iso/sample') {
         res.writeHead(200, { 'content-type': 'application/xml; charset=utf-8' });
         return res.end(samplePacs008({ amount: url.searchParams.get('amount') || '25000.00' }));
+      }
+      if (req.method === 'POST' && url.pathname === '/api/submit') {
+        let body = '';
+        req.on('data', (c) => {
+          body += c;
+          if (body.length > 50_000) req.destroy();
+        });
+        req.on('end', () => {
+          let tx;
+          try {
+            tx = JSON.parse(body || 'null');
+          } catch {
+            return json(res, 400, { ok: false, error: 'MALFORMED', message: 'body is not valid JSON', retryable: false, remedy: null });
+          }
+          json(res, 200, net.submitSigned(tx));
+        });
+        return;
       }
       if (req.method === 'POST' && url.pathname === '/api/action') {
         let body = '';

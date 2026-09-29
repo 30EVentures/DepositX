@@ -988,6 +988,23 @@ export class Ledger {
     return { header, hash, results, violations: this.lastViolations, sweepFires: this.lastSweepFires };
   }
 
+  // Read-only: is this grant usable right now, and how much window headroom is left across the whole chain?
+  grantStatus(id, time) {
+    let chain;
+    try {
+      chain = this.#chain(id, time);
+    } catch (e) {
+      if (!(e instanceof KernelError)) throw e;
+      return { live: false, reason: e.code, remaining_window: 0n };
+    }
+    let rem = null;
+    for (const c of chain) {
+      const left = c.window.max_total - this.#window(c, time).spent;
+      if (rem === null || left < rem) rem = left;
+    }
+    return { live: true, reason: null, remaining_window: rem < 0n ? 0n : rem };
+  }
+
   // ---------------------------------------------------------------- views
   stateView() {
     const s = this.s;

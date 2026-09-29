@@ -3,12 +3,35 @@
 // dashboard and tests drive. Nothing in the kernel depends on this file.
 
 import crypto from 'node:crypto';
-import { Ledger } from './kernel.js';
+import { Ledger, GRANTABLE_TYPES } from './kernel.js';
 import { Bank } from './bank.js';
 import { canon, genKey, sign, verify, sha256, exportKey, importKey } from './crypto.js';
 import { Store } from './store.js';
 import { parsePacs008, buildPacs002, centsOf, IsoError } from './iso20022.js';
 
+
+// Roadmap 6.2. What an agent needs to know when an instruction fails: can it retry, and what would fix it.
+// Codes not listed here are reported as { retryable: false, remedy: null } - never guessed.
+export const ERROR_CATALOG = {
+  ESCALATION_REQUIRED: { retryable: false, remedy: 'Outside the grant envelope: resubmit with the institution ops signature (ops:<issuer>) added alongside the agent signature, or stay within the envelope.' },
+  ENVELOPE_DENIED: { retryable: false, remedy: 'The grant does not allow this instruction type or counterparty. Ask the institution for a broader grant; a co-signature cannot widen scope.' },
+  GRANT_REVOKED: { retryable: false, remedy: 'The grant or one of its ancestors was revoked. Obtain a new grant.' },
+  GRANT_EXPIRED: { retryable: false, remedy: 'The grant or one of its ancestors passed its not_after time. Obtain a new grant.' },
+  GRANT_WIDENS_PARENT: { retryable: false, remedy: 'A sub-grant may only narrow its parent: types, per-instruction max, window cap, counterparties and expiry must all be within the parent.' },
+  GRANT_WRONG_ISSUER: { retryable: false, remedy: 'A grant only authorises the issuer that created it.' },
+  UNKNOWN_GRANT: { retryable: false, remedy: 'No grant with that id is on the ledger (check GET /api/grants).' },
+  CALLER_MISMATCH: { retryable: false, remedy: 'An agent-signed instruction cannot declare caller.kind human; omit caller or declare agent.' },
+  BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it.' },
+  MISSING_SIGNATURE: { retryable: false, remedy: 'A required role signature is absent. See GET /api/schema for the roles this type needs.' },
+  DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already processed: the original outcome stands. Do not resend; use a new inst_id for a new instruction.' },
+  BAD_VALIDITY: { retryable: true, remedy: 'valid_until must be within 60 seconds of block time. Re-sign with a fresh valid_until and a NEW inst_id.' },
+  INSUFFICIENT_FUNDS: { retryable: true, remedy: 'The payer balance is below the amount. Retry after funds arrive, with a new inst_id.' },
+  INSUFFICIENT_SETTLEMENT_POSITION: { retryable: true, remedy: 'The issuer settlement position is short. Retry later, or set queueIfShort to wait for netting.' },
+  ISSUER_QUARANTINED: { retryable: true, remedy: 'The issuer is quarantined by the graded halt. Retry after it is resumed.' },
+  NETWORK_HALTED: { retryable: true, remedy: 'The network is halted. Retry after RESUME.' },
+  VALUE_CAP_EXCEEDED: { retryable: false, remedy: 'Above the per-instruction network cap. Split the instruction.' },
+  MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
+};
 export const dollars = (n) => BigInt(Math.round(n * 100));
 export const fmt = (cents) => {
   const neg = cents < 0n;
@@ -204,6 +227,52 @@ export class Network {
     const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
+  }
+
+  // ------------------------------------------------------------------ agent interface (roadmap 6.2)
+  // The server-free core of POST /api/submit: takes an instruction the CALLER already signed and submits
+  // it as-is. Nothing here signs, completes or repairs an instruction. Never throws on bad input.
+  submitSigned(tx) {
+    const fail = (error, message) => ({ ok: false, error, message, retryable: !!(ERROR_CATALOG[error] || {}).retryable, remedy: (ERROR_CATALOG[error] || {}).remedy || null });
+    if (!tx || typeof tx !== 'object' || Array.isArray(tx)) return fail('MALFORMED', 'instruction must be a JSON object');
+    if (typeof tx.type !== 'string' || typeof tx.inst_id !== 'string' || !tx.sigs || typeof tx.sigs !== 'object') return fail('MALFORMED', 'needs inst_id, type, payload, valid_until and sigs');
+    let block;
+    try {
+      block = this.submit([tx]);
+    } catch (e) {
+      return fail('MALFORMED', e.message);
+    }
+    const r = block.results[0];
+    this.pumpCore();
+    const info = ERROR_CATALOG[r.error] || {};
+    return { ok: r.ok, error: r.error, message: r.message, retryable: r.ok ? false : !!info.retryable, remedy: r.ok ? null : info.remedy || null, events: r.events, caller: r.caller, height: block.height, hash: block.hash };
+  }
+
+  // Grants with live status and remaining window headroom; every amount a decimal string of cents.
+  grantsView(issuer) {
+    const time = Math.max(this.ledger.s.time, this.now());
+    return [...this.ledger.s.grants.values()].filter((g) => !issuer || g.issuer === issuer).map((g) => {
+      const st = this.ledger.grantStatus(g.id, time);
+      return {
+        id: g.id, issuer: g.issuer, label: g.label, parent: g.parent, allow_types: g.allow_types,
+        per_instruction_max: g.per_instruction_max.toString(), window: { seconds: g.window.seconds, max_total: g.window.max_total.toString() },
+        counterparties: g.counterparties, not_after: g.not_after, revoked: g.revoked,
+        live: st.live, reason: st.reason, remaining_window: st.remaining_window.toString(),
+      };
+    });
+  }
+
+  // Machine-readable description of the instruction interface. Plain JSON, no BigInt.
+  static schema() {
+    const SIG = { TRANSFER: ['ops:<payer issuer> | agent:<grant_id>', 'screen:<payer issuer>'], PAYMENT: ['ops:<payer issuer> | agent:<grant_id>', 'screen:<payer issuer>', 'accept:<payee issuer>'], ESCROW_LOCK: ['ops:<payer issuer> | agent:<grant_id>', 'screen:<payer issuer>', 'accept:<payee issuer> (cross-issuer only)'], ESCROW_REFUND: ['ops:<payer issuer> | agent:<grant_id>'], REGISTER_SWEEP: ['ops:<issuer> | agent:<grant_id>'], CANCEL_SWEEP: ['ops:<issuer> | agent:<grant_id>'], GRANT: ['ops:<issuer> (root grant) | agent:<parent grant_id> (sub-grant)'], REVOKE_GRANT: ['ops:<issuer> | agent:<an ancestor grant_id>'] };
+    const types = Object.getOwnPropertyNames(Ledger.prototype).filter((k) => k.startsWith('tx_')).map((k) => k.slice(3)).sort().map((type) => ({ type, grantable: GRANTABLE_TYPES.includes(type), signatures: SIG[type] || null }));
+    return {
+      version: 'depositx-poc-schema/1',
+      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller }', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution' },
+      grantable_types: GRANTABLE_TYPES,
+      types,
+      errors: ERROR_CATALOG,
+    };
   }
 
   // ------------------------------------------------------------------ agent delegation (roadmap 6.1)
