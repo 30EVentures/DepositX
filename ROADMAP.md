@@ -445,6 +445,65 @@ unchanged in shape.
       verified.
 - [x] `npm test` stays green; new tests in `test/caller-attribution.test.js`.
 
+## Priority 6 — agent-native access: delegated, narrowing, verifiable authority
+
+Added 2026-09-29. Design and rationale: `poc/docs/agent-native-access-proposal.md`
+(signed off 2026-09-29 with all three recommended options: full grants build,
+sub-delegation now, spend counted against every ancestor's window). 5.1 made the
+audit trail distinguish agents from humans; this priority bounds what an agent
+*may do* and makes "this was software acting inside an envelope" a fact the
+kernel derives from which key signed, not a label the signer declares.
+
+Decisions taken while turning the proposal into a spec (recorded so they are
+not silently assumed): grantable types in this cut are `TRANSFER`, `PAYMENT`,
+`ESCROW_LOCK`, `ESCROW_REFUND`, `REGISTER_SWEEP`, `CANCEL_SWEEP`, plus `GRANT`
+itself (sub-delegation right); mint, redeem, DvP, funding, halt/resume, netting
+and every `gov:`/`anchor`/`reconciler` action are NOT grantable. Per-instruction
+max, window cap and expiry are mandatory, so every grant is bounded. Windows are
+tumbling, anchored at the first spend. A co-signed (escalated) instruction is
+authorised by the institution and does not count against the window. F4 (batch
+caller uniformity) is deferred.
+
+### [ ] 6.0 Fix 5.1 gaps found while writing the proposal (F1, F2)
+- [ ] A queued PAYMENT keeps its `caller` in the stored queue entry (omitted
+      when unspecified, so existing state roots are unchanged); test that it
+      survives to `NET_CYCLE`.
+- [ ] `kernel.js` header comment no longer claims nothing distinguishes callers.
+
+### [ ] 6.1 `GRANT` / `REVOKE_GRANT`, envelope check, derived caller
+- [ ] `GRANT` signed by `ops:<issuer>` (root) or by `agent:<parent>` (sub-grant);
+      bad shapes, unbounded fields, non-grantable types, unknown/foreign-issuer
+      parents and depth > 4 are rejected with specific codes.
+- [ ] Narrowing: a sub-grant that widens types, per-instruction max, cap,
+      counterparties or expiry is rejected `GRANT_WIDENS_PARENT`; sub-delegation
+      requires `GRANT` in the parent's `allow_types`.
+- [ ] `agent:<grant_id>` signature substitutes for `ops:<issuer>` on grantable
+      types; ALLOW / ESCALATE / DENY behave as specified; `screen:`/`accept:`
+      unchanged.
+- [ ] Spend counts against the grant's window AND every ancestor's window;
+      rolled back with the instruction if it fails.
+- [ ] Revocation (by `ops` or an ancestor's agent key) takes effect in-block and
+      invalidates every descendant; expiry likewise.
+- [ ] Recorded caller for agent-signed instructions is derived
+      `{kind:'agent', grant_id, label}`; a declared `human` is `CALLER_MISMATCH`.
+- [ ] Omitting all agent signatures leaves every existing test, stored block and
+      replay byte-identical (no migration; `grants` absent from state until used).
+
+### [ ] 6.2 Interface an agent can actually use
+- [ ] `POST /api/submit` accepts a fully signed instruction (server never signs).
+- [ ] `GET /api/schema` lists instruction types, roles, payload shapes and an
+      error catalog with `retryable` / `remedy`.
+- [ ] `GET /api/grants` shows grants and remaining window headroom.
+
+### [ ] 6.3 Model-check delegation (S6) and mutation-test it
+- [ ] Safety property S6 (delegation soundness) and new actions in `modelcheck.js`.
+- [ ] Four planted bugs caught: window counter not journaled, revocation not
+      cascading, narrowing compared as strings, escalation accepted without `ops`.
+
+### [ ] 6.4 Docs
+- [ ] `poc/README.md` table row and "What it is NOT" update; `docs/invariant-charter.md`
+      entry with measured numbers; proposal doc marked implemented with amendments.
+
 ## Blocked / needs input
 
 *(Populated during the loop if something needs a decision only Caleb can
