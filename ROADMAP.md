@@ -381,6 +381,70 @@ against the extended alphabet, not assumed.
 - [x] `npm test` stays green; no new test file needed (`modelcheck.test.js`'s
       thresholds updated to the new measured numbers).
 
+## Priority 5 — caller-type attribution (from the Web4/agentic-internet framing review)
+
+Added 2026-09-28. Grounded in this session's own retroactive review:
+`02-technical-implementation.md` §10 and every board seat memo's open-items
+register now ask the same question — does the compliance/screening/
+audit-trail model distinguish a member institution's own authenticated
+software agent initiating an instruction (e.g. the 24/7 treasury sweeps
+already in the use-case ladder) from a human doing the same thing under the
+same key? Today nothing does: `messageOf()`'s signed digest and every
+dashboard/API surface treat "a valid signature from role X" as the entire
+identity of the caller. This priority answers that gap at PoC scale, the
+same way M2 (Priority 4.1) answered issuer-domain confidentiality: a small,
+honest, cryptographically-real addition, not a redesign of the trust model.
+
+### [ ] 5.1 A signed, tamper-evident caller-type field on every instruction
+
+**Design.** Every instruction already carries `{inst_id, type, payload,
+valid_until, sigs}`, and its signature covers exactly those fields via
+`messageOf()`/`canon()`. Add an optional `caller: { kind: 'human' | 'agent',
+label?: string }` field, included in the same signed digest — so a caller
+declares itself at signing time, and that declaration is exactly as
+tamper-evident as `payload` itself (changing `caller` after signing
+invalidates every existing signature, the same `BAD_SIGNATURE` path already
+tested for payload tampering). Omitting `caller` defaults to `{ kind:
+'unspecified' }` on both the signing and verifying side, so every existing
+test, stored block, and `verifyReplay()` call continues to produce
+byte-identical results with no migration. This is not a new access class or
+a new key: whoever holds `ops:MPL`'s key still authenticates as `ops:MPL`;
+`caller.kind` is that same signer's own declaration of whether a human or
+its own automation produced this particular instruction — self-attested,
+not independently verified, exactly as honest as that limitation sounds.
+
+**Depends on:** nothing new; extends the existing `tx()`/`messageOf()` pair
+unchanged in shape.
+
+**Acceptance criteria**
+- [ ] `caller` is part of the signed digest: an instruction signed with
+      `caller: {kind:'human'}` and then relabelled to `{kind:'agent'}`
+      before submission fails with `BAD_SIGNATURE`, exactly like a tampered
+      `payload` does today.
+- [ ] Omitting `caller` entirely still verifies and executes exactly as
+      every existing test does — old call sites, old stored blocks, and
+      `verifyReplay()` from genesis are all unaffected (confirmed by
+      running the full existing suite unmodified before adding any new
+      test).
+- [ ] `stateView()`'s block history and `GET /api/state`'s block log both
+      surface `caller.kind` per instruction (defaulting to `unspecified`
+      when absent) — this is the "a supervisory query can tell them apart"
+      requirement from `02` §10, not just an internal field nobody can see.
+- [ ] The dashboard's block log (`renderBlocks`) shows a small tag for
+      agent-attributed instructions, distinct from human/unspecified ones —
+      visible, not just present in the JSON.
+- [ ] Not model-checked, for the same reason M2 (4.1) wasn't: `caller` is
+      metadata carried alongside an instruction, not a new code path that
+      can itself violate P1–P7 — the existing model-checked actions (mint,
+      pay, escrow, etc.) are unchanged by this; the reasoning goes in
+      `docs/invariant-charter.md` next to M2's own.
+- [ ] `poc/README.md`'s "What it demonstrates" table gains a row; the "No
+      caller-type distinction" line added to "What it is NOT" during the
+      framing review is removed (it's no longer true) and replaced with an
+      honest statement of what's still self-attested vs. independently
+      verified.
+- [ ] `npm test` stays green; new tests in `test/caller-attribution.test.js`.
+
 ## Blocked / needs input
 
 *(Populated during the loop if something needs a decision only Caleb can
