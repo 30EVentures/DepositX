@@ -91,6 +91,7 @@ export class Network {
     this.blocks = [];
     this.log = [];
     this.clockOffset = 0;
+    this.agentKeys = {}; // grantId -> keypair, demo-only custody: a real agent holds its own key and never shares it with the network
     this.corePaused = false;
     this.coreTasks = [];
     this.chaosState = {};
@@ -187,6 +188,7 @@ export class Network {
     if (kind === 'anchor') return this.K.anchor.priv;
     if (kind === 'reconciler') return this.K.rec[who].priv;
     if (kind === 'event') return this.K.event[who].priv;
+    if (kind === 'agent') return this.agentKeys[who].priv; // a delegated agent's own key (roadmap 6.1), never an institution key
     if (kind === 'accept') return this.K.issuers[who].ops.priv;
     return this.K.issuers[who][kind].priv;
   }
@@ -202,6 +204,50 @@ export class Network {
     const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
+  }
+
+  // ------------------------------------------------------------------ agent delegation (roadmap 6.1)
+  // Builds (does not submit) a GRANT: signed by the issuer's ops key for a root grant, or by the parent
+  // grant's agent key for a sub-grant. Returns { tx, key } - the new agent's keypair is only kept once
+  // the kernel accepts the grant (see grantAgent).
+  grantTx(o, { signAs } = {}) {
+    const key = genKey();
+    const parentRec = o.parent ? this.ledger.s.grants.get(o.parent) : null;
+    const notAfter = o.notAfter != null ? o.notAfter : parentRec ? parentRec.not_after : this.now() + 7 * 86400;
+    const big = (v) => (v == null ? null : v.toString());
+    const payload = {
+      grant_id: o.grantId, issuer: o.issuer, agent_key: key.pub, label: o.label, parent: o.parent || null,
+      allow_types: o.allowTypes, per_instruction_max: big(o.perInstructionMax),
+      window: o.window ? { seconds: o.window.seconds, max_total: big(o.window.maxTotal) } : null,
+      counterparties: o.counterparties || null, not_after: notAfter,
+    };
+    const role = signAs || (o.parent ? `agent:${o.parent}` : `ops:${o.issuer}`);
+    const known = role.startsWith('agent:') ? this.agentKeys[role.slice(6)] : this.K.issuers[role.split(':')[1]];
+    const tx = this.tx('GRANT', payload, known ? [role] : []);
+    return { tx, key };
+  }
+  grantAgent(o) {
+    const { tx, key } = this.grantTx(o);
+    const block = this.submit([tx]);
+    const r = block.results[0];
+    if (r.ok) this.agentKeys[o.grantId] = key;
+    return { ok: r.ok, error: r.error, message: r.message, grantId: o.grantId, caller: r.caller, height: block.height };
+  }
+  // Revoke by the institution (default) or by an ancestor grant's agent key (`by`).
+  revokeGrant(grantId, { by } = {}) {
+    const g = this.ledger.s.grants.get(grantId);
+    const role = by ? `agent:${by}` : `ops:${g ? g.issuer : 'MPL'}`;
+    const block = this.submit([this.tx('REVOKE_GRANT', { grant_id: grantId }, [role])]);
+    const r = block.results[0];
+    return { ok: r.ok, error: r.error, message: r.message, height: block.height };
+  }
+  // Builds an instruction authorised by an agent grant instead of the institution's ops key. `roles` are the
+  // remaining required signatures (screen:/accept:); `escalate` adds the institution's ops signature as well.
+  agentTx(grantId, type, payload, roles, { escalate = false, caller, ttl, instId } = {}) {
+    const g = this.ledger.s.grants.get(grantId);
+    const rs = [`agent:${grantId}`, ...roles];
+    if (escalate) rs.push(`ops:${g.issuer}`);
+    return this.tx(type, payload, rs, { caller, ttl, instId });
   }
 
   // ------------------------------------------------------------------ consensus (simulated)

@@ -464,29 +464,29 @@ tumbling, anchored at the first spend. A co-signed (escalated) instruction is
 authorised by the institution and does not count against the window. F4 (batch
 caller uniformity) is deferred.
 
-### [ ] 6.0 Fix 5.1 gaps found while writing the proposal (F1, F2)
-- [ ] A queued PAYMENT keeps its `caller` in the stored queue entry (omitted
+### [x] 6.0 Fix 5.1 gaps found while writing the proposal (F1, F2)
+- [x] A queued PAYMENT keeps its `caller` in the stored queue entry (omitted
       when unspecified, so existing state roots are unchanged); test that it
       survives to `NET_CYCLE`.
-- [ ] `kernel.js` header comment no longer claims nothing distinguishes callers.
+- [x] `kernel.js` header comment no longer claims nothing distinguishes callers.
 
-### [ ] 6.1 `GRANT` / `REVOKE_GRANT`, envelope check, derived caller
-- [ ] `GRANT` signed by `ops:<issuer>` (root) or by `agent:<parent>` (sub-grant);
+### [x] 6.1 `GRANT` / `REVOKE_GRANT`, envelope check, derived caller
+- [x] `GRANT` signed by `ops:<issuer>` (root) or by `agent:<parent>` (sub-grant);
       bad shapes, unbounded fields, non-grantable types, unknown/foreign-issuer
       parents and depth > 4 are rejected with specific codes.
-- [ ] Narrowing: a sub-grant that widens types, per-instruction max, cap,
+- [x] Narrowing: a sub-grant that widens types, per-instruction max, cap,
       counterparties or expiry is rejected `GRANT_WIDENS_PARENT`; sub-delegation
       requires `GRANT` in the parent's `allow_types`.
-- [ ] `agent:<grant_id>` signature substitutes for `ops:<issuer>` on grantable
+- [x] `agent:<grant_id>` signature substitutes for `ops:<issuer>` on grantable
       types; ALLOW / ESCALATE / DENY behave as specified; `screen:`/`accept:`
       unchanged.
-- [ ] Spend counts against the grant's window AND every ancestor's window;
+- [x] Spend counts against the grant's window AND every ancestor's window;
       rolled back with the instruction if it fails.
-- [ ] Revocation (by `ops` or an ancestor's agent key) takes effect in-block and
+- [x] Revocation (by `ops` or an ancestor's agent key) takes effect in-block and
       invalidates every descendant; expiry likewise.
-- [ ] Recorded caller for agent-signed instructions is derived
+- [x] Recorded caller for agent-signed instructions is derived
       `{kind:'agent', grant_id, label}`; a declared `human` is `CALLER_MISMATCH`.
-- [ ] Omitting all agent signatures leaves every existing test, stored block and
+- [x] Omitting all agent signatures leaves every existing test, stored block and
       replay byte-identical (no migration; `grants` absent from state until used).
 
 ### [ ] 6.2 Interface an agent can actually use
