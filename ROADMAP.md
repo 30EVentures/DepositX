@@ -395,7 +395,7 @@ identity of the caller. This priority answers that gap at PoC scale, the
 same way M2 (Priority 4.1) answered issuer-domain confidentiality: a small,
 honest, cryptographically-real addition, not a redesign of the trust model.
 
-### [ ] 5.1 A signed, tamper-evident caller-type field on every instruction
+### [x] 5.1 A signed, tamper-evident caller-type field on every instruction
 
 **Design.** Every instruction already carries `{inst_id, type, payload,
 valid_until, sigs}`, and its signature covers exactly those fields via
@@ -417,33 +417,33 @@ not independently verified, exactly as honest as that limitation sounds.
 unchanged in shape.
 
 **Acceptance criteria**
-- [ ] `caller` is part of the signed digest: an instruction signed with
+- [x] `caller` is part of the signed digest: an instruction signed with
       `caller: {kind:'human'}` and then relabelled to `{kind:'agent'}`
       before submission fails with `BAD_SIGNATURE`, exactly like a tampered
       `payload` does today.
-- [ ] Omitting `caller` entirely still verifies and executes exactly as
+- [x] Omitting `caller` entirely still verifies and executes exactly as
       every existing test does — old call sites, old stored blocks, and
       `verifyReplay()` from genesis are all unaffected (confirmed by
       running the full existing suite unmodified before adding any new
       test).
-- [ ] `stateView()`'s block history and `GET /api/state`'s block log both
+- [x] `stateView()`'s block history and `GET /api/state`'s block log both
       surface `caller.kind` per instruction (defaulting to `unspecified`
       when absent) — this is the "a supervisory query can tell them apart"
       requirement from `02` §10, not just an internal field nobody can see.
-- [ ] The dashboard's block log (`renderBlocks`) shows a small tag for
+- [x] The dashboard's block log (`renderBlocks`) shows a small tag for
       agent-attributed instructions, distinct from human/unspecified ones —
       visible, not just present in the JSON.
-- [ ] Not model-checked, for the same reason M2 (4.1) wasn't: `caller` is
+- [x] Not model-checked, for the same reason M2 (4.1) wasn't: `caller` is
       metadata carried alongside an instruction, not a new code path that
       can itself violate P1–P7 — the existing model-checked actions (mint,
       pay, escrow, etc.) are unchanged by this; the reasoning goes in
       `docs/invariant-charter.md` next to M2's own.
-- [ ] `poc/README.md`'s "What it demonstrates" table gains a row; the "No
+- [x] `poc/README.md`'s "What it demonstrates" table gains a row; the "No
       caller-type distinction" line added to "What it is NOT" during the
       framing review is removed (it's no longer true) and replaced with an
       honest statement of what's still self-attested vs. independently
       verified.
-- [ ] `npm test` stays green; new tests in `test/caller-attribution.test.js`.
+- [x] `npm test` stays green; new tests in `test/caller-attribution.test.js`.
 
 ## Blocked / needs input
 
@@ -466,6 +466,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 *(One line per completed item, newest last.)*
 
+- 2026-09-28 — Priority 5.1: caller-type attribution, the concrete follow-up promised at the end of the Web4/agentic-internet framing review earlier this session. Added an optional `caller: { kind: 'human'|'agent', label? }` to every instruction, included in the same signed digest as `payload` via `messageOf()`/`tx()` - not a new key or access class, just the existing signer's own declaration, exactly as tamper-evident as the payload it already signs. Defaults to `{ kind: 'unspecified' }` on both the signing and verifying side so every existing call site, stored block and `verifyReplay()` run is untouched with zero migration - confirmed by running the full 72-test suite unmodified before writing a single new test. 4 new tests in `test/caller-attribution.test.js`, written first and confirmed red against the unmodified code (3 of 4 failed as expected; the replay test passed trivially since it wasn't asserting on `caller` yet). One real test-design mistake found while implementing, not a code bug: my first `lastTx()` helper assumed the most recent block was always the instruction just submitted, but `pay()` can trigger a later adapter follow-up block (`CLOSE_CONVERT_IN`) that has nothing to do with the caller under test - fixed by searching chronologically for the actual instruction type instead of assuming block order, caught by actually running the tests and reading why two of them failed for a reason unrelated to the feature, not by inspection. Surfaced in `stateView()`'s block history, `GET /api/state`, and a new tag in the dashboard's block log (`renderBlocks`) for agent-attributed instructions - confirmed via a fresh server run, curl, and a browser console check (no errors). Deliberately not model-checked, same reasoning as M2 (4.1): `caller` is metadata no `tx_*` handler branches on, so it can't itself create a new reachable state; recorded in `docs/invariant-charter.md` next to M2's own entry, including the honest limit that this proves the declaration is tamper-evident, not that it's true - a signer can still falsely self-label. `poc/README.md`'s demonstrates table gained a row; the stale "No caller-type distinction" line added during the framing review (now incorrect) was replaced with that same honest self-attested-vs-verified limit. Full suite: 76/76 (was 72).
 - 2026-09-27 — **All roadmap items complete (48/48 checkboxes).** Cleanup pass: scanned for TODO/FIXME/XXX (none), stray debug `console.log` calls (none beyond the pre-existing, intentional CLI-output ones in `bench.js`/`modelcheck.js`/`server.js`), and unused exports from this session's own additions (`parseNonNegAmount`, `ID_RE`, every new tx handler and Network method - all are used, none orphaned). Every `src/*.js` file parses cleanly. `poc/package.json`'s description updated - it still named only the original three templates. Working tree otherwise clean; nothing left uncommitted. Final numbers for the whole roadmap: 4 new kernel templates, 7 new/extended source files, 6 new test files, 60 tests (was 34), 9 commits, all on `main` (no push - remote is `30EVentures/DepositX`, private).
 - 2026-09-27 — 3.1: wired all four new templates into `server.js`'s `act()` (escrowLock/escrowRelease/eventRelease/escrowRefund, registerSweep/cancelSweep, batchDemo + batchEmpty/batchNested guard-rail demos) and added matching dashboard sections 8-10 to `public/index.html`, in the existing visual style. Server-side wiring functionally tested via direct HTTP calls for all 11 new action kinds on a locally-run server (port 8799, not the one already running on 8787 for someone else - left untouched). One own mistake caught immediately, not a code bug: registering a sweep with `keepAmount:"0"` from an account that already held a balance swept its *entire* balance right away - correct, designed behaviour, not a bug; just not the demo scenario I meant to run next. Opened the real rendered page in the browser: all three new sections render correctly (copy, controls, styling matching the existing sections exactly), and a live click-through of Escrow Lock then Release worked end to end through the actual UI (blocks #53 ESCROW_LOCK, #56 ESCROW_RELEASED), not just curl. Full suite still 60/60 (server.js has no automated tests; this is the manual check the roadmap itself called for).
 - 2026-09-27 — 3.2: `poc/README.md`'s "What it demonstrates" table gained rows for Escrow, PayOnEvent, Batch and Sweep (each naming its code and test), the model-check row updated with the real 37-action/depth-5-and-6 numbers, and "What it is NOT" re-checked line by line (added the sweep-safety-property limitation, updated the account count; everything else there is still correctly true - real consensus, ZK, HSMs and a Rust port remain out of scope). Root `README.md`'s PoC description and test count updated too. Test-count and timing lines that were stale (34 tests, depth-8 ~6 min) are now accurate (60 tests ~45s, depth-6 ~100s). No functional code changed; no test re-run needed.

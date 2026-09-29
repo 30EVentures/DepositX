@@ -83,7 +83,7 @@ const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
   if (!m) {
-    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until });
+    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' } });
     msgCache.set(tx, m);
   }
   return m;
@@ -731,12 +731,12 @@ export class Ledger {
       h.call(this, tx, time, j, events);
       j.set(this.s.dedup, tx.inst_id, time);
       this.counters.accepted++;
-      return { instId: tx.inst_id, type: tx.type, ok: true, events };
+      return { instId: tx.inst_id, type: tx.type, ok: true, events, caller: tx.caller || { kind: 'unspecified' } };
     } catch (e) {
       j.rollback();
       if (!(e instanceof KernelError)) throw e;
       this.counters.rejected[e.code] = (this.counters.rejected[e.code] || 0) + 1;
-      return { instId: tx && tx.inst_id, type: tx && tx.type, ok: false, error: e.code, message: e.message, events: [] };
+      return { instId: tx && tx.inst_id, type: tx && tx.type, ok: false, error: e.code, message: e.message, events: [], caller: (tx && tx.caller) || { kind: 'unspecified' } };
     }
   }
 

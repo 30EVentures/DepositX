@@ -116,6 +116,23 @@ rendered differently; it would not exercise anything new. What is worth testing,
 snapshot it was given, that two issuers' views of the identical state genuinely disagree, and that
 a quarantined issuer's status stays visible to a viewer that cannot see its book.
 
+## Roadmap 5.1: caller-type attribution is deliberately not model-checked either
+
+Same reasoning as M2, for a different reason: `caller` is metadata carried alongside an
+instruction (like `inst_id` or `valid_until`), not a value any `tx_*` handler branches on. No
+existing action's behaviour changes based on `caller.kind`, so extending the model checker's
+alphabet with human- and agent-labelled variants of the same actions would explore states
+already reachable today, labelled differently - not a new code path. What's worth testing, and
+is (`test/caller-attribution.test.js`, 4 tests): that `caller` is part of the signed digest (so
+it cannot be relabelled after signing without invalidating every signature on the instruction,
+the same as a tampered `payload`), that omitting it is fully backward-compatible, that two
+differently-attributed instructions are genuinely distinguishable in the block log, and that it
+survives an independent replay from genesis unchanged. The honest limit, stated plainly: this
+proves the *declaration* is tamper-evident, not that the declaration is *true* - a signer can
+still falsely label itself `human` or `agent`. Independently verifying which one actually
+produced an instruction would need attestation of the calling software itself, which is out of
+scope here.
+
 ## What is NOT checked (be honest about the bounds)
 
 - The model checker is **bounded** (state cap and depth cap, small alphabet of $1/$2 amounts,

@@ -11,9 +11,11 @@ The dashboard is a human-convenience shell, not the primary interface: every but
 other caller — a script, a test, or an autonomous agent — can call directly (see `curl`
 examples below and the ISO 20022 endpoints). That's deliberate: state is machine-readable
 and independently verifiable (offline-checkable finality receipts, replayable block log)
-before it is human-readable, not the other way around. See "What it is NOT" for what this
-doesn't yet cover — there's no per-caller identity distinct from "holds a valid key," so a
-human and a software agent using the same institutional key are indistinguishable today.
+before it is human-readable, not the other way around. Every instruction can also declare
+who produced it — `caller: { kind: 'human'|'agent' }`, cryptographically bound to the
+signature (roadmap 5.1) — so a supervisory query can tell a bank's own automation from a
+human at that same bank's terminal. See "What it is NOT" for the honest limit of that: it's
+self-attested by the key holder, not independently verified.
 
 ```
 cd ~/DepositX/poc
@@ -55,6 +57,7 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 | ISO 20022 in and out (L5) | `iso20022.js`: `pacs.008` in, `pacs.002` out with reason codes; UETR is the instruction id; DTD/entity/malformed input refused |
 | Screening enforced at the edge | bank compliance refuses to sign; the kernel refuses any instruction without the screening signature |
 | M2 confidentiality: issuer-domain need-to-know | `confidentialView` in `network.js`, a pure view over `snapshot()` — an issuer sees its own book in full and every other issuer's status only, never its balances or customers; the Bank of Canada observer / operator sees everything, unchanged. The kernel and its invariants are untouched — this is access control, not cryptography, matching the spec's own description of M2 (`confidentiality.test.js`; the dashboard's "Viewing as" selector) |
+| Caller-type attribution: a supervisory query can tell a human-initiated instruction from an agent-initiated one | `caller: { kind, label? }` on every instruction, included in the signed digest via `messageOf()` — as tamper-evident as `payload` itself; relabelling it after signing is a `BAD_SIGNATURE`, not a silent edit. Self-attested by whoever holds the signing key, not independently verified — the key still authenticates the institution, `caller.kind` is that signer's own declaration. Omitted, it defaults to `unspecified` with no migration needed. Surfaced in the block log and the dashboard (`caller-attribution.test.js`) |
 
 ## What it is NOT
 
@@ -65,7 +68,7 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 - **Toy core banking.** The bank simulator is a few dozen lines; real cores are the hard part (see the onboarding playbook).
 - **Simplifications:** account IDs are readable (`MPL:acme`), not hashed commitments; one screening key per bank; the anchor is a mock; time is supplied per block.
 - The benchmark measures one validator's execution stage on one core with everything signed and verified. It is an upper bound, not end-to-end finality.
-- **No caller-type distinction.** The action API authenticates by key, not by whether the caller is a human clicking the dashboard or a script/agent calling the same endpoint — matching the real design gap flagged in `02-technical-implementation.md` §10 and the board memos' open-items registers, not yet resolved here either.
+- **Caller type is self-attested, not independently verified.** `caller.kind` (roadmap 5.1) is cryptographically bound to the instruction — a signer cannot change it after signing — but the signer can still declare `human` while actually being an agent, or vice versa. It answers "does the audit trail distinguish these" (yes now), not "can a false declaration be caught" (no — that would need attestation of the calling software itself, out of scope here).
 
 ## Files
 

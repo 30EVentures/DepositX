@@ -362,7 +362,7 @@ function renderBlocks() {
       el('div', { class: 'top' }, el('span', { class: 'h' }, '#' + b.height), el('span', { class: 'mono muted' }, b.hash.slice(0, 12) + '…'),
         el('span', { class: 'tag' + (b.receiptOk ? '' : ' bad') }, `${b.finalSigs}/4 sigs · ${b.receiptOk ? 'final' : 'NOT FINAL'}`),
         b.halt ? el('span', { class: 'tag bad' }, 'HALT ' + b.halt.reason) : null),
-      b.txs.length === 0 ? el('div', { class: 'muted' }, 'heartbeat (empty block)') : b.txs.map((t) => el('div', {}, t.ok ? '✓ ' : '✗ ', el('b', { class: 'mono' }, t.type), t.ok ? el('span', { class: 'muted' }, ' ' + [...new Set(t.events)].filter((e) => !/CLOSED/.test(e)).join(', ')) : el('span', { style: 'color:var(--bad)' }, ' ' + t.error)))));
+      b.txs.length === 0 ? el('div', { class: 'muted' }, 'heartbeat (empty block)') : b.txs.map((t) => el('div', {}, t.ok ? '✓ ' : '✗ ', el('b', { class: 'mono' }, t.type), t.ok ? el('span', { class: 'muted' }, ' ' + [...new Set(t.events)].filter((e) => !/CLOSED/.test(e)).join(', ')) : el('span', { style: 'color:var(--bad)' }, ' ' + t.error), t.caller && t.caller.kind === 'agent' ? el('span', { class: 'tag', style: 'margin-left:6px', title: t.caller.label || 'agent-attributed' }, 'agent') : null))));
   }
 }
 

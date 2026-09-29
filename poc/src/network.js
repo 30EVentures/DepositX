@@ -192,10 +192,14 @@ export class Network {
   }
 
   // Builds and signs a transaction. `roles` are the signatures the kernel will require.
-  tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId } = {}) {
-    const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, sigs: {} };
+  // `caller` (roadmap 5.1): the signer's own self-attested `{ kind: 'human'|'agent'|'unspecified', label? }`
+  // for THIS instruction. Not a new key or a new access class - whoever holds the role's key still
+  // authenticates as that role. Included in the signed digest, so it is exactly as tamper-evident as
+  // `payload`: relabelling it after signing invalidates every signature already on the instruction.
+  tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId, caller } = {}) {
+    const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, caller: caller || { kind: 'unspecified' }, sigs: {} };
     // sign using the same canonical message the kernel verifies
-    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until });
+    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
   }
@@ -210,7 +214,7 @@ export class Network {
       header: res.header,
       sigs,
       quorum: QUORUM,
-      results: res.results.map((r) => ({ instId: r.instId, type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events })),
+      results: res.results.map((r) => ({ instId: r.instId, type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events, caller: r.caller })),
       violations: res.violations,
       sweepFires: res.sweepFires,
     };
@@ -337,15 +341,15 @@ export class Network {
     return null;
   }
 
-  pay(fromAcct, toAcct, amt, { queue = false, instId } = {}) {
+  pay(fromAcct, toAcct, amt, { queue = false, instId, caller } = {}) {
     const blocked = this.#complianceCheck(fromAcct, toAcct);
     if (blocked) return blocked;
     const [a] = fromAcct.split(':');
     const [b] = toAcct.split(':');
     const same = a === b;
     const tx = same
-      ? this.tx('TRANSFER', { from: fromAcct, to: toAcct, amount: amt.toString() }, [`ops:${a}`, `screen:${a}`], { instId })
-      : this.tx('PAYMENT', { from: fromAcct, to: toAcct, amount: amt.toString(), queueIfShort: queue }, [`ops:${a}`, `screen:${a}`, `accept:${b}`], { instId });
+      ? this.tx('TRANSFER', { from: fromAcct, to: toAcct, amount: amt.toString() }, [`ops:${a}`, `screen:${a}`], { instId, caller })
+      : this.tx('PAYMENT', { from: fromAcct, to: toAcct, amount: amt.toString(), queueIfShort: queue }, [`ops:${a}`, `screen:${a}`, `accept:${b}`], { instId, caller });
     const block = this.submit([tx]);
     this.pumpCore();
     return this.#res(block, { stage: 'payment', events: block.results[0].events.map((e) => e.type) });
@@ -601,7 +605,7 @@ export class Network {
     void anyViol;
     const blocks = this.blocks.slice(-40).reverse().map((b) => ({
       height: b.height, hash: b.hash, time: b.header.time, finalSigs: Object.keys(b.sigs).length, quorum: b.quorum,
-      halt: b.header.halt, receiptOk: b.receiptOk, txs: b.results.map((r) => ({ type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events.map((e) => e.type) })), stateRoot: b.header.stateRoot,
+      halt: b.header.halt, receiptOk: b.receiptOk, txs: b.results.map((r) => ({ type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events.map((e) => e.type), caller: r.caller })), stateRoot: b.header.stateRoot,
     }));
     return js({
       height: L.s.height,
