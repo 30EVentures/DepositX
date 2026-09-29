@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { modelCheck } from '../src/modelcheck.js';
-import { KernelError, Ledger } from '../src/kernel.js';
+import { modelCheck, DELEGATION_MODEL } from '../src/modelcheck.js';
+import { KernelError, Ledger, messageOf } from '../src/kernel.js';
 
 test('model check: every state reachable within 5 actions (incl. a slow core, attacks, and the four new templates) satisfies all safety and liveness properties', () => {
   // Extended (roadmap 2.1) to cover Escrow, PayOnEvent, Batch and Sweep: 37 actions (was 27),
@@ -135,3 +135,95 @@ withMutant('payments ignore the settlement position: the payer can spend money i
   };
   return () => (Ledger.prototype.tx_PAYMENT = orig);
 }, ['S1_INVARIANT']);
+
+// ---------------------------------------------------------------------------------------------
+// Roadmap 6.3: delegation soundness (S6). Grants gate authority (P6), so unlike caller attribution
+// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (16 actions) so
+// the search can go deep: a counterexample needs mint, mint, grant, sub-grant, revoke, use.
+test('model check S6: every state reachable within 9 delegation actions keeps every grant inside its parent, honours revocation through the whole chain, and never lets an agent past its envelope without the institution', () => {
+  const r = modelCheck({ maxDepth: 9, maxStates: 5000, actions: DELEGATION_MODEL });
+  assert.deepEqual(r.failures, []);
+  assert.equal(r.actions, 16);
+  assert.ok(r.states > 700, `explored ${r.states} states`);
+  assert.ok(r.transitions > 9000, `explored ${r.transitions} transitions`);
+});
+
+function withDelegationMutant(name, patch, expectKinds) {
+  test(`mutation (delegation): the checker catches a planted kernel bug (${name})`, () => {
+    const restore = patch();
+    try {
+      const r = modelCheck({ maxDepth: 7, maxStates: 5000, actions: DELEGATION_MODEL });
+      assert.ok(r.failures.length > 0, 'the planted bug went undetected');
+      assert.ok(r.failures.some((f) => expectKinds.includes(f.kind)), `expected one of ${expectKinds}, got ${r.failures.map((f) => f.kind)}`);
+      assert.ok(r.failures[0].trail.length <= 7, 'a short counterexample is reported: ' + r.failures[0].trail.join(' → '));
+    } finally {
+      restore();
+    }
+  });
+}
+
+withDelegationMutant('the window counter is not journaled: a rejected agent instruction still consumes the window', () => {
+  const orig = Ledger.prototype.tx_TRANSFER;
+  Ledger.prototype.tx_TRANSFER = function (tx, time, j, events) {
+    try {
+      return orig.call(this, tx, time, j, events);
+    } catch (e) {
+      j.undo.length = 0; // bug: nothing recorded for undo, so the window bump made before the failure survives
+      throw e;
+    }
+  };
+  return () => (Ledger.prototype.tx_TRANSFER = orig);
+}, ['S2_REJECTION_CHANGED_STATE']);
+
+withDelegationMutant('a sub-grant is stored detached from its parent, so revoking the parent does not cascade', () => {
+  const orig = Ledger.prototype.tx_GRANT;
+  Ledger.prototype.tx_GRANT = function (tx, time, j, events) {
+    orig.call(this, tx, time, j, events);
+    if (tx.payload.parent) j.set(this.s.grants, tx.payload.grant_id, { ...this.s.grants.get(tx.payload.grant_id), parent: null });
+  };
+  return () => (Ledger.prototype.tx_GRANT = orig);
+}, ['S6_DELEGATION']);
+
+withDelegationMutant('narrowing compares money as strings ("1000" <= "200"), so a sub-grant can widen its parent', () => {
+  const orig = Ledger.prototype.tx_GRANT;
+  Ledger.prototype.tx_GRANT = function (tx, time, j, events) {
+    const p = tx.payload;
+    const par = p.parent && this.s.grants.get(p.parent);
+    if (!par) return orig.call(this, tx, time, j, events);
+    messageOf(tx, this.chainId); // cache the signed digest before the payload is touched
+    const real = { max: p.per_instruction_max };
+    if (real.max <= par.per_instruction_max.toString()) p.per_instruction_max = par.per_instruction_max.toString(); // bug: lexicographic compare
+    try {
+      orig.call(this, tx, time, j, events);
+    } finally {
+      p.per_instruction_max = real.max;
+    }
+    const rec = this.s.grants.get(p.grant_id);
+    j.set(this.s.grants, p.grant_id, { ...rec, per_instruction_max: BigInt(real.max) });
+  };
+  return () => (Ledger.prototype.tx_GRANT = orig);
+}, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);
+
+withDelegationMutant('escalation is accepted without the institution signature: the envelope is not enforced', () => {
+  const orig = Ledger.prototype.tx_TRANSFER;
+  Ledger.prototype.tx_TRANSFER = function (tx, time, j, events) {
+    const role = Object.keys(tx.sigs || {}).find((r) => r.startsWith('agent:'));
+    const rec = role && this.s.grants.get(role.slice(6));
+    if (!rec) return orig.call(this, tx, time, j, events);
+    const saved = { max: rec.per_instruction_max, window: rec.window };
+    rec.per_instruction_max = 10n ** 15n; // bug: the envelope is effectively unlimited
+    rec.window = { ...rec.window, max_total: 10n ** 15n };
+    try {
+      return orig.call(this, tx, time, j, events);
+    } finally {
+      rec.per_instruction_max = saved.max;
+      rec.window = saved.window;
+      const cur = this.s.grants.get(rec.id);
+      if (cur !== rec) {
+        cur.per_instruction_max = saved.max;
+        cur.window = { ...cur.window, max_total: saved.window.max_total };
+      }
+    }
+  };
+  return () => (Ledger.prototype.tx_TRANSFER = orig);
+}, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);

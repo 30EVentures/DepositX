@@ -22,7 +22,7 @@ mint holds; `R_i` pending core debits (redemptions and convert-outs); `P_i` pend
 | **P3 Par transfer** | every cross-issuer instruction burns and mints the same amount and moves each settlement position by exactly that amount; no fee, rate or rounding in the kernel | `assertParLegs` (Transfer/Payment/DvP legs; Escrow's lock/refund reuse the same `#moveCash` path, so they are proven by the same code, not a parallel implementation) | reject | cross-bank payment test, fuzz vs reference model |
 | **P4 Settlement backing** | `SP_i ≥ 0` and `Σ SP_i = A − F` | `tx_PAYMENT` check, `checkInvariants` | reject / halt | model check S1, netting test, mutation "ignores position" |
 | **P5 Non-negativity** | every balance `≥ 0` | `#debit`, `checkInvariants` | reject / halt | overdraft attack, fuzz |
-| **P6 Authority** | mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key; payee issuer must accept; the operator can move no balance | `#sig` per handler | reject | forged/missing-signature tests, "operator cannot move a balance" test |
+| **P6 Authority** | mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key **or a live grant's agent key, inside the grant's envelope**; payee issuer must accept; the operator can move no balance; a grant can only narrow its parent and is dead if any ancestor is revoked or expired | `#sig` per handler; `#authorize` for grantable handlers | reject | forged/missing-signature tests, "operator cannot move a balance" test, `delegation.test.js`, model check S6 and four planted delegation bugs |
 | **P7 Halt monotonicity** | once halted only `RESUME` (governance ×2 + observer, + issuer key for an issuer resume, and only if the invariants hold), `ATTEST` and `REPORT_PAR_BREAK` are accepted | `#execTx` gate, `tx_RESUME` | structural | halt/resume tests |
 
 ## Properties beyond the seven
@@ -150,3 +150,52 @@ scope here.
 - The kernel's Node implementation has not been audited. A Rust port with Verus/Kani proofs (spike S2) is the path to machine-checked guarantees.
 - Amount arithmetic uses BigInt (no overflow); a fixed-width port must prove the absence of overflow.
 - **Mutation testing is now seven planted bugs** (four from before, three added for the new templates in roadmap 2.2). It shows the checker can find *classes* of bug; it does not bound what it would miss.
+
+## Roadmap 6.1-6.3: agent delegation is model-checked (S6), unlike M2 and 5.1 (2026-09-29)
+
+M2 and caller attribution were deliberately not model-checked because neither can change what any
+`tx_*` handler does. Delegation is the opposite: a `GRANT` decides whether an instruction is
+authorised at all, which is P6. So it gets exhaustive search and planted bugs.
+
+**S6 (delegation soundness)** is checked after every transition by `checkDelegation` in
+`modelcheck.js`, an oracle written from the spec in `docs/agent-native-access-proposal.md` that calls no
+kernel code (its grant topology is fixed by the model, not read back from the state it is checking):
+(a) every *accepted* agent-signed instruction was inside its grant's envelope in the state *before* it
+ran, counting revocation and expiry of every ancestor, and if it exceeded the per-instruction max or
+any window cap the institution's own signature was on it; (b) in every reachable state every grant
+narrows its parent on every field (types, max, cap, expiry, counterparties, issuer); (c) a revoked
+grant is never un-revoked; (d) the recorded caller of an accepted agent-signed instruction is the grant.
+A *rejected* agent instruction leaving a window counter behind is caught by the existing **S2**, because
+grants are now part of the compared state. Attacks added to **S3**: an agent over its max without the
+institution, an agent signing a type outside its grant, and a sub-grant that widens (a larger max, an
+extra type). All must be refused in every reachable state.
+
+The alphabet: 13 delegation actions (grant, sub-grant, revoke by institution, revoke by parent, four
+agent instructions, one escalation, four attacks). Adding them to the 40-action model would push the
+routine state cap (5,000) to be reached at depth 5, silently exploring *less* of the original model than
+before, so the routine run keeps its 40 actions unchanged and delegation is searched on a focused
+16-action alphabet (delegation plus the three funding actions it needs) that can go deep:
+
+| Run | Actions | Depth | States | Transitions | Time | Failures |
+|---|---|---|---|---|---|---|
+| Routine base model, unchanged (`modelcheck.test.js`) | 40 | 5 | 3,793 | 40,680 | ~32 s | 0 |
+| Delegation model, routine (`modelcheck.test.js`) | 16 | 9 | 810 | 10,384 | ~8 s | 0 |
+| Delegation model, one-off (`node src/modelcheck.js 12 delegation`) | 16 | 12 | **989, exhausted** | 15,824 | 11.6 s | 0 |
+| Everything combined, one-off (`node src/modelcheck.js 5 all`) | 53 | 5 | 5,001 (**capped**) | 61,623 | 47 s | 0 |
+
+The delegation row at depth 12 is an exhausted search: no unexplored state remained, so within that
+alphabet, amounts ($1/$2/$3/$10) and topology (g1 with children g2/g3) the properties hold in *every*
+reachable state, not a sample. The combined row hit the state cap, so it is a data point, not a proof.
+
+**Planted bugs the checker must catch** (`modelcheck.test.js`, all four caught, each within seven
+actions): the window counter not journaled (a rejected agent instruction still consumes the window, S2);
+a sub-grant stored detached from its parent so revocation does not cascade (S6); narrowing compared as
+strings so `"1000" <= "200"` lets a sub-grant widen (S3/S6); escalation accepted without the
+institution's signature (S3/S6). As with the earlier mutation tests these were written after the S6
+oracle rather than red-first, because a mutation test is *of* the checker: each was confirmed to fail
+when the corresponding kernel patch is applied and pass otherwise.
+
+What this does not cover: the model has one issuer's grants, one window length, no clock advance (so
+window reset and expiry are covered by `delegation.test.js` examples, not by the search), and a bug in a
+combination of delegation and the other templates beyond mint/fund/transfer/pay is only sampled by the
+capped combined run. Sweeps fired after a grant-authorised registration are not windowed (see README).

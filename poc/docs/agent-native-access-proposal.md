@@ -1,8 +1,38 @@
 # Proposal: agent-native access (delegated, narrowing, verifiable)
 
-Status: **proposal only — nothing in `src/` changes until this is signed off.** Written 2026-09-29.
-Follows Priority 5.1 (caller-type attribution). Proposed roadmap items are at the end, unchecked, and
-are *not yet* in `ROADMAP.md`.
+Status: **signed off and implemented 2026-09-29 as roadmap Priority 6** (all three recommended options
+taken: full grants build, sub-delegation now, spend counted against every ancestor's window). The body
+below is the original proposal, kept as written; where the build differs, §10 says how and why.
+Follows Priority 5.1 (caller-type attribution).
+
+## 10. Amendments made while implementing (read this first if you are comparing to the code)
+
+- **Grantable types** are `TRANSFER`, `PAYMENT`, `ESCROW_LOCK`, `ESCROW_REFUND`, `REGISTER_SWEEP`,
+  `CANCEL_SWEEP` and `GRANT` (the sub-delegation right). Mint, redeem, DvP, funding, halt/resume,
+  netting and every `gov:`/`anchor`/`reconciler` action are not grantable — an explicit deny-by-default
+  list in `kernel.js` (`GRANTABLE_TYPES`), not a convention. `REVOKE_GRANT` is never in a grant: the
+  institution, or an *ancestor's* agent key, may revoke; a descendant may not.
+- **Everything in an envelope is mandatory**: per-instruction max, window cap and a future expiry. There
+  is no unbounded grant (`GRANT_UNBOUNDED`).
+- **Window narrowing is enforced at use time, not by comparing window lengths at grant time.** A
+  sub-grant's cap must be ≤ its parent's cap, but its window *length* is free; because spend is counted
+  against every ancestor's own window, a longer or shorter child window can never let the chain spend
+  more than any ancestor allows. (§3.1 said "same or shorter window"; that rule was dropped as redundant.)
+- **Windows are tumbling**, anchored at the first spend, not sliding.
+- **A co-signed (escalated) instruction is authorised by the institution and does not consume the
+  window.** Stricter alternative (count it) rejected: the institution has explicitly approved that one.
+- **Depth**: a root plus four levels of sub-grants (`MAX_GRANT_DEPTH = 5`).
+- **Sweeps are only gated at registration.** `REGISTER_SWEEP` is checked against `allow_types` and the
+  counterparty allow-list; the transfers a registered sweep later fires are not windowed. A grant that can
+  register sweeps between two allow-listed accounts can therefore move any amount between exactly those
+  two accounts over time. Narrow the counterparty list, or do not put `REGISTER_SWEEP` in the grant.
+- **Batch attribution (F4) is deferred.** Inside a `BATCH`, an agent-signed leg is authorised and
+  bounded like any other, but its derived caller is not surfaced on the outer `BATCH` result.
+- **Agent keys are demo-custodied by `Network`** (`agentKeys`) so the dashboard process can build test
+  instructions; they are not persisted across a durable-store restart. A real agent brings its own key:
+  `grantAgent({ key })` / the `GRANT` payload carries only the public half.
+- **F1 and F2 are fixed** (roadmap 6.0): a queued payment keeps its caller in stored state, and the
+  `kernel.js` header no longer claims nothing distinguishes callers.
 
 ## 1. The gap 5.1 leaves
 

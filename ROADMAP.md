@@ -495,13 +495,13 @@ caller uniformity) is deferred.
       error catalog with `retryable` / `remedy`.
 - [x] `GET /api/grants` shows grants and remaining window headroom.
 
-### [ ] 6.3 Model-check delegation (S6) and mutation-test it
-- [ ] Safety property S6 (delegation soundness) and new actions in `modelcheck.js`.
-- [ ] Four planted bugs caught: window counter not journaled, revocation not
+### [x] 6.3 Model-check delegation (S6) and mutation-test it
+- [x] Safety property S6 (delegation soundness) and new actions in `modelcheck.js`.
+- [x] Four planted bugs caught: window counter not journaled, revocation not
       cascading, narrowing compared as strings, escalation accepted without `ops`.
 
-### [ ] 6.4 Docs
-- [ ] `poc/README.md` table row and "What it is NOT" update; `docs/invariant-charter.md`
+### [x] 6.4 Docs
+- [x] `poc/README.md` table row and "What it is NOT" update; `docs/invariant-charter.md`
       entry with measured numbers; proposal doc marked implemented with amendments.
 
 ## Blocked / needs input
@@ -522,6 +522,9 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
   legal opinions, bank onboarding — business and regulatory work, not code.
 
 ## Session log
+
+- 2026-09-29 — Priority 6: agent-native access, all of 6.0-6.4, built from `poc/docs/agent-native-access-proposal.md` after Caleb signed off with all three recommended options (full grants build, sub-delegation now, spend counted against every ancestor's window). Spec written into this file unchecked and committed first, tests before code. **6.0** found while writing the proposal, not by a test: `tx_PAYMENT`'s queue entry rebuilt the stored tx without `caller`, so a queued-then-netted payment lost its attribution in state - fixed (caller kept only when not `unspecified`, so old state roots are unchanged), and the stale "nothing here distinguishes who is calling" header comment in `kernel.js` corrected. **6.1** `GRANT`/`REVOKE_GRANT`, `#authorize` (stands in for the `ops` signature on six grantable handlers; with no agent signature it *is* the old `#sig` call, so every existing path is byte-identical - confirmed by running all 76 old tests before and after, and `grants` is absent from `stateView()` until first used so no state root changed), `#chain` (revocation/expiry of any ancestor kills the chain, so cascade needs no enumeration), tumbling windows charged to every ancestor through the same undo journal, derived caller. 31 tests in `delegation.test.js`, written first and confirmed red (all but two failed on the missing API; the 6.0 one failed for the real reason, the dropped caller). **6.2** `submitSigned`/`schema()`/`grantsView()` on `Network` plus `POST /api/submit`, `GET /api/schema`, `GET /api/grants` on the demo server; 7 tests in `agent-interface.test.js`, red first; HTTP layer checked with curl on a fresh port (bad JSON, unsigned/expired instruction, schema, empty and filtered grants, bad issuer now a 400 not a 500) but **not** a fully signed instruction over HTTP, because the demo server holds every key and an outside caller cannot obtain one - that path is covered at the `submitSigned` level only. Dashboard block-log tag distinguishes a kernel-derived agent ("agent - grant") from a self-declared one. **6.3** unlike 5.1/M2 this gates authority, so it is model-checked: oracle `checkDelegation` (S6) written from the spec with the topology fixed by the model, 13 new actions, and grants added to the compared state so S2 catches window leaks. Adding the actions to the routine alphabet would have hit the 5,000-state cap at depth 5 and silently explored less of the original model, so the routine run stays at 40 actions (3,793 states / 40,680 transitions, unchanged) and delegation is searched on a focused 16-action alphabet: exhausted at depth 12 (989 states, 15,824 transitions, 11.6 s), zero failures; the combined 53-action run is capped and reported as a data point, not a proof. Four planted bugs, all caught. Mutation tests were written after the oracle, not red-first - honest about that in the charter. **Mistakes of my own, caught by running, not inspection:** a test helper defaulted a grant's expiry to one day and a window test advanced the clock a day plus a second, so the grant expired instead of the window resetting (moved the default to seven days); the quarantine test used a same-issuer `TRANSFER`, which the kernel never gates on quarantine (only cross-issuer movement checks it) - switched to `PAYMENT`; a test error message used `JSON.stringify` on an object holding a BigInt; and my first attempt to restructure the model alphabets was lost to a tooling failure (Bash unavailable for a stretch), which I noticed by reading the file back rather than assuming the edit had landed. Deferred and stated in the README: sweeps are gated only at registration; batch legs' derived caller is not surfaced on the outer result (F4); demo agent keys are not persisted across restarts. Full suite: 119/119 (was 76), ~59 s.
+
 
 *(One line per completed item, newest last.)*
 

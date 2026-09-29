@@ -8,6 +8,13 @@
 //            S3  attacks (forged signature, replay, unbacked mint, overdraft) are always rejected
 //            S4  when the core has fully caught up, ledger supply == core control balance, per issuer
 //            S5  when the core has fully caught up, money is conserved across core, ledger and anchor
+//            S6  delegation soundness (roadmap 6.3), checked by an ORACLE that shares no code with the kernel:
+//                (a) every accepted agent-signed instruction was inside its grant's envelope, in the state
+//                    BEFORE it ran, counting revocation/expiry of every ancestor (topology is fixed by the model);
+//                (b) every grant in every reachable state narrows its parent on every field;
+//                (c) a revoked grant is never un-revoked; (d) the recorded caller of an accepted agent-signed
+//                    instruction is the grant, not a label. (A rejected instruction leaving a window counter
+//                    behind is caught by S2, because grants are part of the compared state.)
 //   LIVENESS L1  from EVERY reachable state, letting the core drain its backlog reaches a quiescent state
 //                where every invariant holds (no state is a dead end, including "slow core" states)
 //
@@ -17,7 +24,7 @@
 // sampling, and it is what TLC would do on a TLA+ model if a Java runtime were available.
 
 import { Network, dollars } from './network.js';
-import { canon } from './crypto.js';
+import { canon, genKey } from './crypto.js';
 
 const ACCTS = ['MPL:acme', 'NSR:cedar'];
 const isA = (a) => a.startsWith('MPL');
@@ -53,10 +60,11 @@ function key(net) {
     paused: net.corePaused,
     escrows: [...net.ledger.s.escrows].map(([k, v]) => [k, v.from, v.to, v.amount, v.eventName]),
     sweeps: [...net.ledger.s.sweeps].map(([k, v]) => [k, v.from, v.to, v.keep]),
+    grants: [...net.ledger.s.grants].map(([k, v]) => [k, v.revoked, v.win.spent]),
   });
 }
 // state as the safety properties see it (no ids)
-const coreState = (net) => canon({ a: net.ledger.s.accounts, i: net.ledger.s.issuers, an: net.ledger.s.anchor, q: net.ledger.s.queue, e: net.ledger.s.escrows, sw: net.ledger.s.sweeps });
+const coreState = (net) => canon({ a: net.ledger.s.accounts, i: net.ledger.s.issuers, an: net.ledger.s.anchor, q: net.ledger.s.queue, e: net.ledger.s.escrows, sw: net.ledger.s.sweeps, g: net.ledger.s.grants });
 
 const totalMoney = (net) => {
   let t = net.ledger.s.anchor.A;
@@ -67,7 +75,88 @@ const totalMoney = (net) => {
   return t;
 };
 
-export const ACTIONS = [
+// ---- delegation (roadmap 6.3). Fixed topology and fixed keys, so a state restored from a snapshot can
+// always sign for the grants it contains. g1: root, MPL, may TRANSFER/PAYMENT and sub-delegate, max $2 per
+// instruction and $2 per window. g2: sub-grant of g1, TRANSFER only, $1 / $2. g3 only ever appears in
+// attacks. The amounts are chosen so a numeric-vs-lexicographic comparison bug is reachable: "1000" <= "200".
+const GK = { g1: genKey(), g2: genKey(), g3: genKey() };
+const TOPO = { g1: null, g2: 'g1', g3: 'g1' };
+const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
+const G2 = { grantId: 'g2', issuer: 'MPL', label: 'sub agent', parent: 'g1', allowTypes: ['TRANSFER'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g2 };
+const agentXfer = (net, gid, amt, opts) => net.submitSigned(net.agentTx(gid, 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(amt).toString() }, ['screen:MPL'], opts));
+const agentPay = (net, gid, amt) => net.submitSigned(net.agentTx(gid, 'PAYMENT', { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(amt).toString(), queueIfShort: false }, ['screen:MPL', 'accept:NSR']));
+
+export const DELEGATION_ACTIONS = [
+  { name: 'grant g1 (MPL: TRANSFER/PAYMENT/GRANT, max $2, cap $2)', kind: 'legit', run: (net) => net.grantAgent(G1) },
+  { name: 'sub-grant g2 under g1 (TRANSFER, max $1, cap $2)', kind: 'legit', run: (net) => net.grantAgent(G2) },
+  { name: 'revoke g1 (institution)', kind: 'legit', run: (net) => net.revokeGrant('g1') },
+  { name: 'revoke g2 (by its parent g1)', kind: 'legit', run: (net) => net.revokeGrant('g2', { by: 'g1' }) },
+  { name: 'agent g1 transfer acme->harbour $1', kind: 'legit', run: (net) => agentXfer(net, 'g1', 1) },
+  { name: 'agent g1 transfer acme->harbour $2', kind: 'legit', run: (net) => agentXfer(net, 'g1', 2) },
+  { name: 'agent g1 pay acme->cedar $1', kind: 'legit', run: (net) => agentPay(net, 'g1', 1) },
+  { name: 'agent g2 transfer acme->harbour $1', kind: 'legit', run: (net) => agentXfer(net, 'g2', 1) },
+  { name: 'agent g1 transfer $3 co-signed by the institution (escalation)', kind: 'legit', run: (net) => agentXfer(net, 'g1', 3, { escalate: true }) },
+  { name: 'ATTACK agent g1 transfer $3 WITHOUT the institution co-signature', kind: 'attack', run: (net) => agentXfer(net, 'g1', 3) },
+  { name: 'ATTACK agent g2 signs a PAYMENT (not in its allow_types)', kind: 'attack', run: (net) => agentPay(net, 'g2', 1) },
+  { name: 'ATTACK sub-grant g3 under g1 widening max to $10', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER'], perInstructionMax: dollars(10) }) },
+  { name: 'ATTACK sub-grant g3 under g1 adding ESCROW_LOCK', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER', 'ESCROW_LOCK'] }) },
+];
+
+// The S6 oracle. Deliberately re-derives the rules from the spec in docs/agent-native-access-proposal.md
+// instead of calling the kernel, so a kernel bug cannot hide behind itself.
+const AMOUNT_TYPES = new Set(['TRANSFER', 'PAYMENT', 'ESCROW_LOCK']);
+function checkDelegation(pre, net) {
+  const out = [];
+  const post = net.ledger.s;
+  for (const [id, g] of post.grants) {
+    const par = TOPO[id];
+    if ((g.parent || null) !== par) out.push(`${id} is stored with parent ${g.parent}, the model's topology says ${par}`);
+    if (par) {
+      const p = post.grants.get(par);
+      if (!p) out.push(`${id} exists without its parent ${par}`);
+      else {
+        const narrows = g.issuer === p.issuer && g.allow_types.every((t) => p.allow_types.includes(t)) && g.per_instruction_max <= p.per_instruction_max && g.window.max_total <= p.window.max_total && g.not_after <= p.not_after && (p.counterparties === null || (g.counterparties !== null && g.counterparties.every((a) => p.counterparties.includes(a))));
+        if (!narrows) out.push(`${id} is wider than its parent ${par}`);
+      }
+    }
+    const before = pre.grants.get(id);
+    if (before && before.revoked && !g.revoked) out.push(`${id} was un-revoked`);
+  }
+  net.log.forEach((entry, i) => {
+    const blk = net.blocks[i];
+    entry.txs.forEach((tx, k) => {
+      const role = Object.keys(tx.sigs || {}).find((r) => r.startsWith('agent:'));
+      if (!role || !blk.results[k].ok) return;
+      const gid = role.slice(6);
+      const time = blk.header.time;
+      const chain = []; // leaf first, straight from the model's topology
+      for (let c = gid; c; c = TOPO[c]) chain.push(pre.grants.get(c));
+      const live = chain.every((c) => c && !c.revoked && time <= c.not_after);
+      if (tx.type === 'REVOKE_GRANT') {
+        let anc = false;
+        for (let c = TOPO[tx.payload.grant_id]; c; c = TOPO[c]) if (c === gid) anc = true;
+        if (!anc || !live) out.push(`${gid} revoked ${tx.payload.grant_id} but is not a live ancestor`);
+        return;
+      }
+      const leaf = chain[0];
+      if (!live) return out.push(`accepted ${tx.type} under dead grant ${gid} (revoked, expired or ancestor gone)`);
+      if (!leaf.allow_types.includes(tx.type)) out.push(`accepted ${tx.type} outside ${gid}'s allow_types`);
+      const c = blk.results[k].caller;
+      if (!c || c.kind !== 'agent' || c.grant_id !== gid) out.push(`accepted ${tx.type} under ${gid} but recorded caller ${JSON.stringify(c)}`);
+      if (!AMOUNT_TYPES.has(tx.type)) return;
+      if (tx.sigs[`ops:${leaf.issuer}`]) return; // institution co-signed: escalated, outside the envelope by design
+      const amt = BigInt(tx.payload.amount);
+      if (amt > leaf.per_instruction_max) out.push(`accepted ${amt} cents under ${gid} above its per-instruction max without the institution signature`);
+      for (const l of chain) {
+        const spent = l.win.spent === 0n || time >= l.win.start + l.window.seconds ? 0n : l.win.spent;
+        if (spent + amt > l.window.max_total) out.push(`accepted ${amt} cents under ${gid}, over ${l.id}'s window cap, without the institution signature`);
+      }
+    });
+  });
+  return out;
+}
+
+export const BASE_ACTIONS = [
   ...[1, 2].flatMap((n) => ACCTS.flatMap((a) => [
     { name: `mint ${a} $${n}`, kind: 'legit', run: (net) => net.mint(a.split(':')[0], a.split(':')[1], dollars(n)) },
     { name: `redeem ${a} $${n}`, kind: 'legit', run: (net) => net.redeem(a.split(':')[0], a.split(':')[1], dollars(n)) },
@@ -123,7 +212,18 @@ export const ACTIONS = [
   { name: 'ATTACK over cap', kind: 'attack', run: (net) => net.chaos('over_cap') },
 ];
 
-export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {} } = {}) {
+// Everything, delegation included. Not the default: at 53 actions the routine state cap is reached at
+// depth 5, so a default run would silently explore less of the ORIGINAL model than before. Use it for
+// one-off deep runs (`node src/modelcheck.js 5 all`); the routine tests run BASE_ACTIONS and, separately,
+// the focused DELEGATION_MODEL below.
+export const ACTIONS = [...BASE_ACTIONS, ...DELEGATION_ACTIONS];
+
+// A small alphabet for the delegation properties alone: funding, the grant lifecycle and agent
+// instructions. Keeps the reachable space small enough to search deep (a delegation counterexample
+// needs mint, mint, grant, sub-grant, revoke, use = six steps), which the full alphabet's state cap cannot.
+export const DELEGATION_MODEL = [...BASE_ACTIONS.filter((a) => /^(mint MPL:acme|fund MPL)/.test(a.name)), ...DELEGATION_ACTIONS];
+
+export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {}, actions = BASE_ACTIONS } = {}) {
   // A closed toy economy: two banks, one customer each, $4 of deposits and $4 of central-bank funds apiece,
   // nothing minted and no positions funded yet. Everything else has to be created by the actions below,
   // so the reachable state space is finite.
@@ -136,6 +236,7 @@ export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {} } =
     net.banks[i].customer(c).ordinary = dollars(4);
     net.banks[i].cbBalance = dollars(4);
   }
+  Object.assign(net.agentKeys, GK); // agent keys are part of the model, not of any one state
   const initialMoney = totalMoney(net);
   const failures = [];
   const fail = (kind, trail, detail) => {
@@ -171,12 +272,13 @@ export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {} } =
       // L1 at every reachable state
       restoreAll(net, node.snap);
       checkQuiescent(node.trail);
-      for (const act of ACTIONS) {
+      for (const act of actions) {
         restoreAll(net, node.snap);
         const before = coreState(net);
         const r = act.run(net);
         transitions++;
         const trail = [...node.trail, act.name];
+        for (const d of checkDelegation(node.snap.s, net)) fail('S6_DELEGATION', trail, d);
         const viol = net.ledger.checkInvariants(net.ledger.s.time).violations;
         if (viol.length || net.ledger.s.halt) fail('S1_INVARIANT', trail, JSON.stringify(viol) + ' ' + (net.ledger.s.halt && net.ledger.s.halt.reason));
         if (act.kind === 'attack') {
@@ -204,13 +306,13 @@ export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {} } =
     frontier = next;
     if (failures.length >= 5) break;
   }
-  return { states: seen.size, transitions, quiescentChecks: quiescent, depthReached: maxSeenDepth, exhausted: frontier.length === 0 && !capped, capped, failures, actions: ACTIONS.length };
+  return { states: seen.size, transitions, quiescentChecks: quiescent, depthReached: maxSeenDepth, exhausted: frontier.length === 0 && !capped, capped, failures, actions: actions.length };
 }
 
 if (process.argv[1] && process.argv[1].endsWith('modelcheck.js')) {
   const depth = Number(process.argv[2]) || 6;
   const t0 = Date.now();
-  const r = modelCheck({ maxDepth: depth, log: console.log });
+  const r = modelCheck({ maxDepth: depth, log: console.log, actions: process.argv[3] === 'all' ? ACTIONS : process.argv[3] === 'delegation' ? DELEGATION_MODEL : BASE_ACTIONS });
   console.log(JSON.stringify({ ...r, seconds: +((Date.now() - t0) / 1000).toFixed(1) }, null, 2));
   process.exit(r.failures.length ? 1 : 0);
 }

@@ -19,11 +19,12 @@ self-attested by the key holder, not independently verified.
 
 ```
 cd ~/DepositX/poc
-npm test                                  # 60 tests (~45 s)
+npm test                                  # 119 tests (~60 s)
 npm start                                 # dashboard at http://127.0.0.1:8787 (in memory)
 DEPOSITX_DATA=./data npm start             # same, durable: survives restarts, tamper-evident
 npm run bench                             # kernel throughput
 node src/modelcheck.js 6                  # explicit-state model check: ~12,000 states, ~100 s
+node src/modelcheck.js 12 delegation      # agent-delegation model, exhausted: 989 states, ~12 s
 ```
 
 ISO 20022 over HTTP (with the server running):
@@ -58,6 +59,7 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 | Screening enforced at the edge | bank compliance refuses to sign; the kernel refuses any instruction without the screening signature |
 | M2 confidentiality: issuer-domain need-to-know | `confidentialView` in `network.js`, a pure view over `snapshot()` — an issuer sees its own book in full and every other issuer's status only, never its balances or customers; the Bank of Canada observer / operator sees everything, unchanged. The kernel and its invariants are untouched — this is access control, not cryptography, matching the spec's own description of M2 (`confidentiality.test.js`; the dashboard's "Viewing as" selector) |
 | Caller-type attribution: a supervisory query can tell a human-initiated instruction from an agent-initiated one | `caller: { kind, label? }` on every instruction, included in the signed digest via `messageOf()` — as tamper-evident as `payload` itself; relabelling it after signing is a `BAD_SIGNATURE`, not a silent edit. Self-attested by whoever holds the signing key, not independently verified — the key still authenticates the institution, `caller.kind` is that signer's own declaration. Omitted, it defaults to `unspecified` with no migration needed. Surfaced in the block log and the dashboard (`caller-attribution.test.js`) |
+| Agent-native access: bounded, narrowing, revocable delegation; the caller is derived, not declared | An institution's `ops` key signs an on-ledger `GRANT`: an agent key may sign only the named types (`TRANSFER`, `PAYMENT`, `ESCROW_LOCK`/`REFUND`, `REGISTER_SWEEP`/`CANCEL_SWEEP`, and the right to sub-delegate) inside a mandatory envelope — per-instruction max, tumbling-window cap, counterparty allow-list, expiry. A sub-grant can only narrow its parent, and its spend counts against *every ancestor's* window. In-envelope is ALLOW; over it needs the institution's own signature as well (ESCALATE) or is refused; out-of-scope is refused (DENY). Revocation is in-block and cascades to every descendant. For an agent-signed instruction the kernel *derives* `caller` from the grant. Mint, redeem, DvP, funding, halt/resume and netting can never be granted. Agent-facing interface: `POST /api/submit` (the caller signs; the server never does), `GET /api/schema` (types, required signatures, error catalog with `retryable`/`remedy`), `GET /api/grants` (live status and window headroom). Unlike 5.1, this gates authority (P6), so it *is* model-checked: property S6 by an oracle that shares no code with the kernel, exhausted at depth 12 (989 states, 15,824 transitions), with four planted bugs caught (`delegation.test.js`, `agent-interface.test.js`, `modelcheck.test.js`; design and amendments in `docs/agent-native-access-proposal.md`) |
 
 ## What it is NOT
 
@@ -68,7 +70,8 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 - **Toy core banking.** The bank simulator is a few dozen lines; real cores are the hard part (see the onboarding playbook).
 - **Simplifications:** account IDs are readable (`MPL:acme`), not hashed commitments; one screening key per bank; the anchor is a mock; time is supplied per block.
 - The benchmark measures one validator's execution stage on one core with everything signed and verified. It is an upper bound, not end-to-end finality.
-- **Caller type is self-attested, not independently verified.** `caller.kind` (roadmap 5.1) is cryptographically bound to the instruction — a signer cannot change it after signing — but the signer can still declare `human` while actually being an agent, or vice versa. It answers "does the audit trail distinguish these" (yes now), not "can a false declaration be caught" (no — that would need attestation of the calling software itself, out of scope here).
+- **Caller type is self-attested when signed with an institution key; derived when signed with a grant key.** `caller.kind` on an `ops`-signed instruction (roadmap 5.1) is cryptographically bound to it but declared by the signer, who can still say `human` while being an agent. For an `agent:<grant_id>`-signed instruction (roadmap 6.1) the kernel records the caller from the grant, so that case is not a claim. Still not proven: that the *holder* of an agent key is autonomous software rather than a person with the key (that needs attestation of the running software), and key custody, rotation and compromise of an agent key are out of scope — the envelope bounds the damage, it does not prevent it.
+- **Delegation limits, stated plainly.** A registered sweep is gated only at registration: the transfers it later fires are not windowed, so a grant that may register sweeps between two allow-listed accounts can move any amount between exactly those two over time. A batch leg signed by an agent is authorised like any other, but the outer `BATCH` result does not surface the leg's derived caller. Demo agent keys are held by `Network` and are not persisted across a durable-store restart; a real agent supplies only its public key in the `GRANT`.
 
 ## Files
 

@@ -280,7 +280,7 @@ export class Network {
   // grant's agent key for a sub-grant. Returns { tx, key } - the new agent's keypair is only kept once
   // the kernel accepts the grant (see grantAgent).
   grantTx(o, { signAs } = {}) {
-    const key = genKey();
+    const key = o.key || genKey(); // a real agent brings its own key and shares only the public half
     const parentRec = o.parent ? this.ledger.s.grants.get(o.parent) : null;
     const notAfter = o.notAfter != null ? o.notAfter : parentRec ? parentRec.not_after : this.now() + 7 * 86400;
     const big = (v) => (v == null ? null : v.toString());
@@ -315,7 +315,7 @@ export class Network {
   agentTx(grantId, type, payload, roles, { escalate = false, caller, ttl, instId } = {}) {
     const g = this.ledger.s.grants.get(grantId);
     const rs = [`agent:${grantId}`, ...roles];
-    if (escalate) rs.push(`ops:${g.issuer}`);
+    if (escalate) rs.push(`ops:${g ? g.issuer : String(payload.from || payload.issuer || '').split(':')[0]}`); // an unknown grant is the kernel's to reject
     return this.tx(type, payload, rs, { caller, ttl, instId });
   }
 
