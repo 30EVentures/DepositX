@@ -504,6 +504,86 @@ caller uniformity) is deferred.
 - [x] `poc/README.md` table row and "What it is NOT" update; `docs/invariant-charter.md`
       entry with measured numbers; proposal doc marked implemented with amendments.
 
+## Priority 7 — close the two delegation gaps left open by Priority 6
+
+Added 2026-09-29. Both are recorded as deferred/limits in `poc/README.md` ("What it is
+NOT") and `poc/docs/agent-native-access-proposal.md` §10. Grounded in the code as it
+stands: `#runSweeps` (`kernel.js`, run from `#endOfBlock`) moves `balance - keep`
+directly, with no envelope, no journal and no reference to who registered the rule;
+`tx_BATCH` checks no signature of its own (each leg carries its own), so the outer
+result's `caller` is whatever the batch declared, which nothing verifies.
+
+Decisions taken in this spec (recorded so they are not silently assumed; say if you
+disagree before 7.1 is built): a sweep registered under a grant is **charged to that
+grant's whole chain at each firing and moves only what fits** (partial firing) instead
+of failing or firing in full; a sweep whose grant chain is dead (revoked, expired, an
+ancestor gone) is **suspended, not deleted** — it stays registered and visible, moves
+nothing, and the institution can cancel it. Sweeps registered by the institution's own
+key are untouched. A batch's outer caller is **derived from its legs**, and legs with
+different effective callers are rejected.
+
+### [ ] 7.1 Sweeps registered under a grant are bounded by that grant
+
+**Design.** `REGISTER_SWEEP` authorised by `agent:<grant_id>` stores `grant: <grant_id>`
+on the sweep record (omitted for institution-registered sweeps, so no existing state
+root changes). At each firing `#runSweeps` computes headroom = min(the grant's
+`per_instruction_max`, `max_total - spent` in every live ancestor's current window),
+moves `min(excess, headroom)`, and charges that amount to every window in the chain,
+using the same tumbling-window rule as `#authorize`. Firing is not an instruction, so
+there is no ESCALATE path: what does not fit simply waits for the next window. The
+firing must use one shared helper with `#authorize`'s window logic, not a copy.
+
+**Acceptance criteria**
+- [ ] A sweep registered by the institution's own key fires exactly as today (all
+      existing sweep tests unmodified and green; `sweep` records for them carry no
+      `grant` field).
+- [ ] A sweep registered under a grant, with excess larger than the grant's headroom,
+      moves exactly the headroom and no more; the remainder moves in a later window
+      after the window turns over (test with `advance()`).
+- [ ] A firing is charged to every ancestor's window: a sibling grant's spend and the
+      sweep's firings share the parent's cap (extends the existing ancestor test).
+- [ ] Revoking or expiring the grant, or any ancestor, suspends the sweep: it moves
+      nothing, stays in `state.sweeps`, is reported in `sweepFires` as suspended, and
+      `CANCEL_SWEEP` by the institution still removes it.
+- [ ] A sweep's firing under a grant is replay-deterministic (`verifyReplay` from genesis
+      matches) and survives a durable-store restart.
+- [ ] Model checker: new actions (agent registers a sweep under g1; agent-registered
+      sweep left running across a revoke) and S6 extended in `checkDelegation`, written
+      from the spec, not from the kernel: total moved by a grant's sweeps within a
+      window never exceeds any chain member's cap, and a dead chain never moves money.
+      Search re-run on the delegation alphabet; numbers recorded, not assumed.
+- [ ] One new planted bug the checker must catch (sweep ignores the grant's window),
+      written after the oracle as in 6.3, and said so in the charter.
+- [ ] `README.md` "Delegation limits" bullet about ungated sweep firing is removed and
+      replaced by the actual behaviour; `docs/agent-native-access-proposal.md` §10's
+      sweep bullet updated; `docs/invariant-charter.md` gains the new numbers.
+
+### [ ] 7.2 A batch's caller is derived from its legs (F4)
+
+**Design.** `tx_BATCH` computes each leg's effective caller (the derived
+`agent:<grant_id>` caller if the leg was agent-authorised, else its declared caller,
+else `unspecified`). If they are not all identical (`canon`-equal) the batch is rejected
+`BATCH_MIXED_CALLERS`; otherwise the outer `BATCH` result reports that shared caller.
+The outer batch's own declared `caller` is ignored for the result, since nothing signs
+it. Legs are unchanged otherwise (each is still authorised and bounded on its own).
+
+**Acceptance criteria**
+- [ ] A batch whose legs are all `unspecified` behaves exactly as today, including the
+      model checker's existing batch action (the routine 40-action run still reports
+      3,793 states / 40,680 transitions).
+- [ ] A batch of legs all authorised by the same grant reports
+      `{kind:'agent', grant_id, label}` on the outer result and in the block log.
+- [ ] A batch mixing an agent-authorised leg with an `ops`-signed leg, or two different
+      grants, is rejected `BATCH_MIXED_CALLERS` and changes no state (rollback test).
+- [ ] An outer batch declaring `caller: {kind:'human'}` around agent legs does not get
+      to report `human`.
+- [ ] Each agent-authorised leg still charges the grant's window once, and a batch that
+      fails mid-way restores the window (extends the journal-rollback test).
+- [ ] `schema()` error catalog gains `BATCH_MIXED_CALLERS` with a remedy; the README
+      "batch leg" limit and proposal §10's F4 bullet are removed/updated.
+- [ ] Model checker: existing batch action untouched; add one mixed-caller batch
+      **attack** (must always be rejected and inert) and extend S6(d) to batches.
+
 ## Blocked / needs input
 
 *(Populated during the loop if something needs a decision only Caleb can
