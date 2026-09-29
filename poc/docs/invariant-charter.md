@@ -170,20 +170,21 @@ grants are now part of the compared state. Attacks added to **S3**: an agent ove
 institution, an agent signing a type outside its grant, and a sub-grant that widens (a larger max, an
 extra type). All must be refused in every reachable state.
 
-The alphabet: 13 delegation actions (grant, sub-grant, revoke by institution, revoke by parent, four
-agent instructions, one escalation, four attacks). Adding them to the 40-action model would push the
+The alphabet: 16 delegation actions (grant, sub-grant, revoke by institution, revoke by parent, four
+agent instructions, one escalation, an agent-registered sweep, an agent batch, five attacks including a
+mixed-caller batch). Adding them to the 40-action model would push the
 routine state cap (5,000) to be reached at depth 5, silently exploring *less* of the original model than
 before, so the routine run keeps its 40 actions unchanged and delegation is searched on a focused
-16-action alphabet (delegation plus the three funding actions it needs) that can go deep:
+19-action alphabet (delegation plus the three funding actions it needs) that can go deep:
 
 | Run | Actions | Depth | States | Transitions | Time | Failures |
 |---|---|---|---|---|---|---|
 | Routine base model, unchanged (`modelcheck.test.js`) | 40 | 5 | 3,793 | 40,680 | ~32 s | 0 |
-| Delegation model, routine (`modelcheck.test.js`) | 16 | 9 | 810 | 10,384 | ~8 s | 0 |
-| Delegation model, one-off (`node src/modelcheck.js 12 delegation`) | 16 | 12 | **989, exhausted** | 15,824 | 11.6 s | 0 |
+| Delegation model, routine (`modelcheck.test.js`) | 19 | 9 | 1,315 | 19,171 | ~15 s | 0 |
+| Delegation model, one-off (`node src/modelcheck.js 20 delegation`) | 19 | 13 | **1,767, exhausted** | 33,573 | 25.1 s | 0 |
 | Everything combined, one-off (`node src/modelcheck.js 5 all`) | 53 | 5 | 5,001 (**capped**) | 61,623 | 47 s | 0 |
 
-The delegation row at depth 12 is an exhausted search: no unexplored state remained, so within that
+The delegation row at depth 13 is an exhausted search: no unexplored state remained, so within that
 alphabet, amounts ($1/$2/$3/$10) and topology (g1 with children g2/g3) the properties hold in *every*
 reachable state, not a sample. The combined row hit the state cap, so it is a data point, not a proof.
 
@@ -199,3 +200,25 @@ What this does not cover: the model has one issuer's grants, one window length, 
 window reset and expiry are covered by `delegation.test.js` examples, not by the search), and a bug in a
 combination of delegation and the other templates beyond mint/fund/transfer/pay is only sampled by the
 capped combined run. Sweeps fired after a grant-authorised registration are not windowed (see README).
+
+### Roadmap 7.1 / 7.2: sweeps under a grant, and batch callers (2026-09-29)
+
+The two gaps recorded above are closed and the search re-run on the extended alphabet (the three new
+actions are in the numbers in the table above; the earlier 16-action figures were 810 states routine and
+989 exhausted).
+
+**7.1.** `#runSweeps` charges a grant-registered sweep's firing to the same windows `#authorize` charges
+(one shared `#charge`), so the two cannot disagree about how a window turns over. The oracle extension
+judges each firing of the model's one agent-owned sweep (`s9`, whose owner is fixed by the model, not read
+from the kernel's record) against the *pre-state* window plus everything already charged in the same
+action (instructions, batch legs and earlier firings), and flags any firing under a dead chain.
+**7.2.** For an accepted `BATCH`, the oracle recomputes every leg's effective caller from the leg itself
+(signature role, else declared caller), requires them identical, requires the batch's recorded caller to
+equal them, and now also judges each leg's envelope and window use like a top-level agent instruction.
+
+Planted bugs, both caught: a grant-registered sweep that forgets its grant (fires unbounded, S6) and a
+batch accepted with mixed callers (S3/S6). As with 6.3 they were written after the oracle, not red-first.
+The four earlier delegation mutants were re-run against the larger alphabet and are still caught.
+
+Unchanged and re-confirmed: the routine 40-action base model still reports 3,793 states / 40,680
+transitions with zero failures.

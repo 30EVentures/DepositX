@@ -247,10 +247,27 @@ export class Ledger {
       this.#sig(tx, `ops:${issuerId}`);
       return; // institution-authorised: does not consume the window
     }
-    if (amt !== null) for (const c of chain) {
+    if (amt !== null) this.#charge(chain, amt, time, j);
+  }
+  // Charge `amt` to every grant in the chain's own window. One place for both instructions and sweep
+  // firings, so the two can never disagree about how a window turns over. `j` is omitted at end-of-block,
+  // which has no journal (nothing at end-of-block can fail after this point).
+  #charge(chain, amt, time, j) {
+    for (const c of chain) {
       const w = this.#window(c, time);
-      j.set(this.s.grants, c.id, { ...c, win: { start: w.start, spent: w.spent + amt } });
+      const rec = { ...c, win: { start: w.start, spent: w.spent + amt } };
+      if (j) j.set(this.s.grants, c.id, rec);
+      else this.s.grants.set(c.id, rec);
     }
+  }
+  // How much the chain would still allow right now for one instruction-sized movement.
+  #headroom(chain, time) {
+    let room = chain[0].per_instruction_max;
+    for (const c of chain) {
+      const left = c.window.max_total - this.#window(c, time).spent;
+      if (left < room) room = left;
+    }
+    return room < 0n ? 0n : room;
   }
 
   // The caller worth recording on a stored copy of `tx`: derived from a grant, else self-attested,
@@ -660,13 +677,19 @@ export class Ledger {
   tx_BATCH(tx, time, j, events) {
     const p = tx.payload;
     need(Array.isArray(p.legs) && p.legs.length > 0, 'BATCH_EMPTY');
+    const callers = [];
     for (const leg of p.legs) {
       const h = this.#checkEnvelope(leg, time);
       need(leg.type !== 'BATCH', 'BATCH_NO_NESTING');
       h.call(this, leg, time, j, events);
       j.set(this.s.dedup, leg.inst_id, time);
-      this.#derived = null; // a leg's grant is not the outer BATCH's caller
+      callers.push(canon(this.#derived || (leg.caller && typeof leg.caller === 'object' ? leg.caller : { kind: 'unspecified' })));
+      this.#derived = null;
     }
+    // The outer BATCH signs nothing (its legs do), so its declared caller is not evidence of anything.
+    // Its caller is what its legs share; legs with different effective callers cannot ride together.
+    need(callers.every((c) => c === callers[0]), 'BATCH_MIXED_CALLERS', 'every leg of a batch must have the same effective caller (same grant, or the same declared caller)');
+    this.#derived = JSON.parse(callers[0]);
     events.push({ type: 'BATCH_SETTLED', legs: p.legs.length });
   }
 
@@ -685,7 +708,9 @@ export class Ledger {
     need(typeof p.sweepId === 'string' && ID_RE.test(p.sweepId), 'BAD_SWEEP_ID');
     need(!this.s.sweeps.has(p.sweepId), 'SWEEP_EXISTS');
     const keep = parseNonNegAmount(p.keepAmount);
-    j.set(this.s.sweeps, p.sweepId, { from: from.id, to: to.id, keep });
+    // registered under a grant: every firing is bounded by, and charged to, that grant's chain (roadmap 7.1).
+    // Omitted otherwise, so institution-registered sweeps have exactly the record they always had.
+    j.set(this.s.sweeps, p.sweepId, { from: from.id, to: to.id, keep, ...(this.#derived ? { grant: this.#derived.grant_id } : {}) });
     events.push({ type: 'SWEEP_REGISTERED', sweepId: p.sweepId, from: from.id, to: to.id, keep: keep.toString() });
   }
   tx_CANCEL_SWEEP(tx, time, j, events) {
@@ -941,10 +966,25 @@ export class Ledger {
       const from = this.s.accounts.get(sw.from);
       const to = this.s.accounts.get(sw.to);
       if (!from || !to || from.balance <= sw.keep) continue;
-      const excess = from.balance - sw.keep;
+      let excess = from.balance - sw.keep;
+      if (sw.grant) {
+        let chain;
+        try {
+          chain = this.#chain(sw.grant, time);
+        } catch (e) {
+          if (!(e instanceof KernelError)) throw e;
+          // dead chain: suspended, not deleted - it stays registered and visible, and the institution can cancel it
+          this.lastSweepFires.push({ sweepId, from: from.id, to: to.id, amount: '0', grant: sw.grant, suspended: true, reason: e.code });
+          continue;
+        }
+        const room = this.#headroom(chain, time);
+        if (room < excess) excess = room;
+        if (excess === 0n) continue; // window spent: waits for the next one
+        this.#charge(chain, excess, time, null);
+      }
       from.balance -= excess;
       to.balance += excess;
-      this.lastSweepFires.push({ sweepId, from: from.id, to: to.id, amount: excess.toString() });
+      this.lastSweepFires.push({ sweepId, from: from.id, to: to.id, amount: excess.toString(), ...(sw.grant ? { grant: sw.grant } : {}) });
     }
   }
 

@@ -22,12 +22,12 @@ Follows Priority 5.1 (caller-type attribution).
 - **A co-signed (escalated) instruction is authorised by the institution and does not consume the
   window.** Stricter alternative (count it) rejected: the institution has explicitly approved that one.
 - **Depth**: a root plus four levels of sub-grants (`MAX_GRANT_DEPTH = 5`).
-- **Sweeps are only gated at registration.** `REGISTER_SWEEP` is checked against `allow_types` and the
-  counterparty allow-list; the transfers a registered sweep later fires are not windowed. A grant that can
-  register sweeps between two allow-listed accounts can therefore move any amount between exactly those
-  two accounts over time. Narrow the counterparty list, or do not put `REGISTER_SWEEP` in the grant.
-- **Batch attribution (F4) is deferred.** Inside a `BATCH`, an agent-signed leg is authorised and
-  bounded like any other, but its derived caller is not surfaced on the outer `BATCH` result.
+- **Sweeps** were first gated only at registration; **roadmap 7.1 closed that.** A sweep registered
+  under a grant records it, is charged to the grant's whole chain at every firing, moves only the
+  remaining headroom (partial firing) and waits for the next window for the rest; a dead chain suspends
+  it (registered and visible, moving nothing; the institution can cancel it).
+- **Batch attribution (F4)** was first deferred; **roadmap 7.2 closed that.** A batch's caller is derived
+  from its legs and legs with different effective callers are rejected (`BATCH_MIXED_CALLERS`).
 - **Agent keys are demo-custodied by `Network`** (`agentKeys`) so the dashboard process can build test
   instructions; they are not persisted across a durable-store restart. A real agent brings its own key:
   `grantAgent({ key })` / the `GRANT` payload carries only the public half.

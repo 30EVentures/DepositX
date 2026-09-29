@@ -81,7 +81,8 @@ const totalMoney = (net) => {
 // attacks. The amounts are chosen so a numeric-vs-lexicographic comparison bug is reachable: "1000" <= "200".
 const GK = { g1: genKey(), g2: genKey(), g3: genKey() };
 const TOPO = { g1: null, g2: 'g1', g3: 'g1' };
-const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
+const SWEEP_OWNER = { s9: 'g1' }; // the sweep only g1's agent ever registers (the institution's own is s1)
+const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT', 'REGISTER_SWEEP'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
 const G2 = { grantId: 'g2', issuer: 'MPL', label: 'sub agent', parent: 'g1', allowTypes: ['TRANSFER'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g2 };
 const agentXfer = (net, gid, amt, opts) => net.submitSigned(net.agentTx(gid, 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(amt).toString() }, ['screen:MPL'], opts));
 const agentPay = (net, gid, amt) => net.submitSigned(net.agentTx(gid, 'PAYMENT', { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(amt).toString(), queueIfShort: false }, ['screen:MPL', 'accept:NSR']));
@@ -96,6 +97,11 @@ export const DELEGATION_ACTIONS = [
   { name: 'agent g1 pay acme->cedar $1', kind: 'legit', run: (net) => agentPay(net, 'g1', 1) },
   { name: 'agent g2 transfer acme->harbour $1', kind: 'legit', run: (net) => agentXfer(net, 'g2', 1) },
   { name: 'agent g1 transfer $3 co-signed by the institution (escalation)', kind: 'legit', run: (net) => agentXfer(net, 'g1', 3, { escalate: true }) },
+  // roadmap 7.1: a sweep under g1 (keep $0, so it wants to move everything) - bounded by g1's headroom, suspended if g1 dies
+  { name: 'agent g1 registers sweep s9 (acme -> harbour, keep $0)', kind: 'legit', run: (net) => net.submitSigned(net.agentTx('g1', 'REGISTER_SWEEP', { sweepId: 's9', from: 'MPL:acme', to: 'MPL:harbour', keepAmount: '0' }, [])) },
+  // roadmap 7.2: a batch of one grant's legs is fine; one that mixes callers must always be refused
+  { name: 'batch: two g1 transfers $1', kind: 'legit', run: (net) => net.submitSigned(net.tx('BATCH', { legs: [net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL']), net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL'])] }, [])) },
+  { name: 'ATTACK batch mixing a g1 leg with an institution-signed leg', kind: 'attack', run: (net) => net.submitSigned(net.tx('BATCH', { legs: [net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL']), net.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['ops:MPL', 'screen:MPL'])] }, [])) },
   { name: 'ATTACK agent g1 transfer $3 WITHOUT the institution co-signature', kind: 'attack', run: (net) => agentXfer(net, 'g1', 3) },
   { name: 'ATTACK agent g2 signs a PAYMENT (not in its allow_types)', kind: 'attack', run: (net) => agentPay(net, 'g2', 1) },
   { name: 'ATTACK sub-grant g3 under g1 widening max to $10', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER'], perInstructionMax: dollars(10) }) },
@@ -122,36 +128,90 @@ function checkDelegation(pre, net) {
     const before = pre.grants.get(id);
     if (before && before.revoked && !g.revoked) out.push(`${id} was un-revoked`);
   }
+  // Walk this action's blocks in order. `used` is what THIS action has already charged to each grant window
+  // (instructions, batch legs and sweep firings alike), on top of the pre-state window, so a second leg or a
+  // firing is judged against what the first one left, computed here and not read back from the kernel.
+  const used = new Map();
+  const spentAt = (l, time) => (l.win.spent === 0n || time >= l.win.start + l.window.seconds ? 0n : l.win.spent) + (used.get(l.id) || 0n);
+  const chainOf = (gid) => {
+    const chain = [];
+    for (let c = gid; c; c = TOPO[c]) chain.push(pre.grants.get(c));
+    return chain;
+  };
+  const isLive = (chain, time) => chain.every((c) => c && !c.revoked && time <= c.not_after);
+  // a grant chain is also dead in the model if the ACTION itself revoked something in it (revocations are monotone
+  // and the only revoking instruction of an action is its first block, so the final state is the state at end-of-block)
+  const deadInPost = (gid) => {
+    for (let c = gid; c; c = TOPO[c]) {
+      const g = post.grants.get(c);
+      if (!g || g.revoked) return true;
+    }
+    return false;
+  };
+  const effectiveCaller = (leg) => {
+    const role = Object.keys(leg.sigs || {}).find((r) => r.startsWith('agent:'));
+    if (role) return { kind: 'agent', grant_id: role.slice(6), label: (pre.grants.get(role.slice(6)) || {}).label };
+    return leg.caller && typeof leg.caller === 'object' ? leg.caller : { kind: 'unspecified' };
+  };
+  const checkAgentTx = (tx, time, resultCaller, isLeg) => {
+    const role = Object.keys(tx.sigs || {}).find((r) => r.startsWith('agent:'));
+    if (!role) return;
+    const gid = role.slice(6);
+    const chain = chainOf(gid);
+    if (tx.type === 'REVOKE_GRANT') {
+      let anc = false;
+      for (let c = TOPO[tx.payload.grant_id]; c; c = TOPO[c]) if (c === gid) anc = true;
+      if (!anc || !isLive(chain, time)) out.push(`${gid} revoked ${tx.payload.grant_id} but is not a live ancestor`);
+      return;
+    }
+    const leaf = chain[0];
+    if (!isLive(chain, time)) return out.push(`accepted ${tx.type} under dead grant ${gid} (revoked, expired or ancestor gone)`);
+    if (!leaf.allow_types.includes(tx.type)) out.push(`accepted ${tx.type} outside ${gid}'s allow_types`);
+    if (!isLeg) {
+      const c = resultCaller;
+      if (!c || c.kind !== 'agent' || c.grant_id !== gid) out.push(`accepted ${tx.type} under ${gid} but recorded caller ${JSON.stringify(c)}`);
+    }
+    if (!AMOUNT_TYPES.has(tx.type)) return;
+    if (tx.sigs[`ops:${leaf.issuer}`]) return; // institution co-signed: escalated, outside the envelope by design, and not charged
+    const amt = BigInt(tx.payload.amount);
+    if (amt > leaf.per_instruction_max) out.push(`accepted ${amt} cents under ${gid} above its per-instruction max without the institution signature`);
+    for (const l of chain) {
+      if (spentAt(l, time) + amt > l.window.max_total) out.push(`accepted ${amt} cents under ${gid}, over ${l.id}'s window cap, without the institution signature`);
+      used.set(l.id, (used.get(l.id) || 0n) + amt);
+    }
+  };
   net.log.forEach((entry, i) => {
     const blk = net.blocks[i];
+    const time = blk.header.time;
     entry.txs.forEach((tx, k) => {
-      const role = Object.keys(tx.sigs || {}).find((r) => r.startsWith('agent:'));
-      if (!role || !blk.results[k].ok) return;
-      const gid = role.slice(6);
-      const time = blk.header.time;
-      const chain = []; // leaf first, straight from the model's topology
-      for (let c = gid; c; c = TOPO[c]) chain.push(pre.grants.get(c));
-      const live = chain.every((c) => c && !c.revoked && time <= c.not_after);
-      if (tx.type === 'REVOKE_GRANT') {
-        let anc = false;
-        for (let c = TOPO[tx.payload.grant_id]; c; c = TOPO[c]) if (c === gid) anc = true;
-        if (!anc || !live) out.push(`${gid} revoked ${tx.payload.grant_id} but is not a live ancestor`);
+      const res = blk.results[k];
+      if (!res.ok) return;
+      if (tx.type === 'BATCH') {
+        // roadmap 7.2: an accepted batch's legs share ONE effective caller, and that is the batch's caller
+        const callers = tx.payload.legs.map((l) => JSON.stringify(effectiveCaller(l)));
+        if (!callers.every((c) => c === callers[0])) out.push('accepted a batch whose legs have different effective callers');
+        else if (JSON.stringify(res.caller) !== callers[0] && JSON.stringify({ kind: res.caller.kind, grant_id: res.caller.grant_id, label: res.caller.label }) !== callers[0]) out.push(`batch reports caller ${JSON.stringify(res.caller)}, its legs share ${callers[0]}`);
+        for (const leg of tx.payload.legs) checkAgentTx(leg, time, null, true);
         return;
       }
-      const leaf = chain[0];
-      if (!live) return out.push(`accepted ${tx.type} under dead grant ${gid} (revoked, expired or ancestor gone)`);
-      if (!leaf.allow_types.includes(tx.type)) out.push(`accepted ${tx.type} outside ${gid}'s allow_types`);
-      const c = blk.results[k].caller;
-      if (!c || c.kind !== 'agent' || c.grant_id !== gid) out.push(`accepted ${tx.type} under ${gid} but recorded caller ${JSON.stringify(c)}`);
-      if (!AMOUNT_TYPES.has(tx.type)) return;
-      if (tx.sigs[`ops:${leaf.issuer}`]) return; // institution co-signed: escalated, outside the envelope by design
-      const amt = BigInt(tx.payload.amount);
-      if (amt > leaf.per_instruction_max) out.push(`accepted ${amt} cents under ${gid} above its per-instruction max without the institution signature`);
-      for (const l of chain) {
-        const spent = l.win.spent === 0n || time >= l.win.start + l.window.seconds ? 0n : l.win.spent;
-        if (spent + amt > l.window.max_total) out.push(`accepted ${amt} cents under ${gid}, over ${l.id}'s window cap, without the institution signature`);
-      }
+      checkAgentTx(tx, time, res.caller, false);
     });
+    // roadmap 7.1: sweep firings. In this model a sweep with id s9 is only ever registered by g1's agent action
+    // (the institution's own sweep is s1), so its owner is known from the model, not read from the kernel's record.
+    for (const f of blk.sweepFires || []) {
+      const owner = SWEEP_OWNER[f.sweepId];
+      if (!owner || BigInt(f.amount) === 0n) continue;
+      const a = BigInt(f.amount);
+      const chain = chainOf(owner);
+      if (deadInPost(owner)) out.push(`sweep ${f.sweepId} moved ${a} cents although grant ${owner}'s chain is dead`);
+      const leaf = chain[0];
+      if (leaf && a > leaf.per_instruction_max) out.push(`sweep ${f.sweepId} moved ${a} cents, above ${owner}'s per-instruction max`);
+      for (const l of chain) {
+        if (!l) continue;
+        if (spentAt(l, time) + a > l.window.max_total) out.push(`sweep ${f.sweepId} moved ${a} cents, over ${l.id}'s window cap`);
+        used.set(l.id, (used.get(l.id) || 0n) + a);
+      }
+    }
   });
   return out;
 }

@@ -138,14 +138,14 @@ withMutant('payments ignore the settlement position: the payer can spend money i
 
 // ---------------------------------------------------------------------------------------------
 // Roadmap 6.3: delegation soundness (S6). Grants gate authority (P6), so unlike caller attribution
-// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (16 actions) so
+// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (19 actions) so
 // the search can go deep: a counterexample needs mint, mint, grant, sub-grant, revoke, use.
 test('model check S6: every state reachable within 9 delegation actions keeps every grant inside its parent, honours revocation through the whole chain, and never lets an agent past its envelope without the institution', () => {
   const r = modelCheck({ maxDepth: 9, maxStates: 5000, actions: DELEGATION_MODEL });
   assert.deepEqual(r.failures, []);
-  assert.equal(r.actions, 16);
-  assert.ok(r.states > 700, `explored ${r.states} states`);
-  assert.ok(r.transitions > 9000, `explored ${r.transitions} transitions`);
+  assert.equal(r.actions, 19);
+  assert.ok(r.states > 1200, `explored ${r.states} states`);
+  assert.ok(r.transitions > 17500, `explored ${r.transitions} transitions`);
 });
 
 function withDelegationMutant(name, patch, expectKinds) {
@@ -226,4 +226,24 @@ withDelegationMutant('escalation is accepted without the institution signature: 
     }
   };
   return () => (Ledger.prototype.tx_TRANSFER = orig);
+}, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);
+
+// Roadmap 7.1 / 7.2: the two gaps Priority 6 left open, each with a planted bug.
+withDelegationMutant('a sweep registered under a grant is not bounded by it: the grant is dropped from the sweep record, so it fires unbounded', () => {
+  const orig = Ledger.prototype.tx_REGISTER_SWEEP;
+  Ledger.prototype.tx_REGISTER_SWEEP = function (tx, time, j, events) {
+    orig.call(this, tx, time, j, events);
+    const { grant, ...rest } = this.s.sweeps.get(tx.payload.sweepId); // bug: forgets which grant it belongs to
+    j.set(this.s.sweeps, tx.payload.sweepId, rest);
+  };
+  return () => (Ledger.prototype.tx_REGISTER_SWEEP = orig);
+}, ['S6_DELEGATION']);
+
+withDelegationMutant('a batch is accepted although its legs have different effective callers', () => {
+  const orig = Ledger.prototype.tx_BATCH;
+  Ledger.prototype.tx_BATCH = function (tx, time, j, events) {
+    for (const leg of tx.payload.legs) this['tx_' + leg.type].call(this, leg, time, j, events); // bug: no shared-caller check
+    events.push({ type: 'BATCH_SETTLED', legs: tx.payload.legs.length });
+  };
+  return () => (Ledger.prototype.tx_BATCH = orig);
 }, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);

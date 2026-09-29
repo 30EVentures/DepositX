@@ -522,7 +522,7 @@ nothing, and the institution can cancel it. Sweeps registered by the institution
 key are untouched. A batch's outer caller is **derived from its legs**, and legs with
 different effective callers are rejected.
 
-### [ ] 7.1 Sweeps registered under a grant are bounded by that grant
+### [x] 7.1 Sweeps registered under a grant are bounded by that grant
 
 **Design.** `REGISTER_SWEEP` authorised by `agent:<grant_id>` stores `grant: <grant_id>`
 on the sweep record (omitted for institution-registered sweeps, so no existing state
@@ -534,31 +534,31 @@ there is no ESCALATE path: what does not fit simply waits for the next window. T
 firing must use one shared helper with `#authorize`'s window logic, not a copy.
 
 **Acceptance criteria**
-- [ ] A sweep registered by the institution's own key fires exactly as today (all
+- [x] A sweep registered by the institution's own key fires exactly as today (all
       existing sweep tests unmodified and green; `sweep` records for them carry no
       `grant` field).
-- [ ] A sweep registered under a grant, with excess larger than the grant's headroom,
+- [x] A sweep registered under a grant, with excess larger than the grant's headroom,
       moves exactly the headroom and no more; the remainder moves in a later window
       after the window turns over (test with `advance()`).
-- [ ] A firing is charged to every ancestor's window: a sibling grant's spend and the
+- [x] A firing is charged to every ancestor's window: a sibling grant's spend and the
       sweep's firings share the parent's cap (extends the existing ancestor test).
-- [ ] Revoking or expiring the grant, or any ancestor, suspends the sweep: it moves
+- [x] Revoking or expiring the grant, or any ancestor, suspends the sweep: it moves
       nothing, stays in `state.sweeps`, is reported in `sweepFires` as suspended, and
       `CANCEL_SWEEP` by the institution still removes it.
-- [ ] A sweep's firing under a grant is replay-deterministic (`verifyReplay` from genesis
+- [x] A sweep's firing under a grant is replay-deterministic (`verifyReplay` from genesis
       matches) and survives a durable-store restart.
-- [ ] Model checker: new actions (agent registers a sweep under g1; agent-registered
+- [x] Model checker: new actions (agent registers a sweep under g1; agent-registered
       sweep left running across a revoke) and S6 extended in `checkDelegation`, written
       from the spec, not from the kernel: total moved by a grant's sweeps within a
       window never exceeds any chain member's cap, and a dead chain never moves money.
       Search re-run on the delegation alphabet; numbers recorded, not assumed.
-- [ ] One new planted bug the checker must catch (sweep ignores the grant's window),
+- [x] One new planted bug the checker must catch (sweep ignores the grant's window),
       written after the oracle as in 6.3, and said so in the charter.
-- [ ] `README.md` "Delegation limits" bullet about ungated sweep firing is removed and
+- [x] `README.md` "Delegation limits" bullet about ungated sweep firing is removed and
       replaced by the actual behaviour; `docs/agent-native-access-proposal.md` §10's
       sweep bullet updated; `docs/invariant-charter.md` gains the new numbers.
 
-### [ ] 7.2 A batch's caller is derived from its legs (F4)
+### [x] 7.2 A batch's caller is derived from its legs (F4)
 
 **Design.** `tx_BATCH` computes each leg's effective caller (the derived
 `agent:<grant_id>` caller if the leg was agent-authorised, else its declared caller,
@@ -568,20 +568,20 @@ The outer batch's own declared `caller` is ignored for the result, since nothing
 it. Legs are unchanged otherwise (each is still authorised and bounded on its own).
 
 **Acceptance criteria**
-- [ ] A batch whose legs are all `unspecified` behaves exactly as today, including the
+- [x] A batch whose legs are all `unspecified` behaves exactly as today, including the
       model checker's existing batch action (the routine 40-action run still reports
       3,793 states / 40,680 transitions).
-- [ ] A batch of legs all authorised by the same grant reports
+- [x] A batch of legs all authorised by the same grant reports
       `{kind:'agent', grant_id, label}` on the outer result and in the block log.
-- [ ] A batch mixing an agent-authorised leg with an `ops`-signed leg, or two different
+- [x] A batch mixing an agent-authorised leg with an `ops`-signed leg, or two different
       grants, is rejected `BATCH_MIXED_CALLERS` and changes no state (rollback test).
-- [ ] An outer batch declaring `caller: {kind:'human'}` around agent legs does not get
+- [x] An outer batch declaring `caller: {kind:'human'}` around agent legs does not get
       to report `human`.
-- [ ] Each agent-authorised leg still charges the grant's window once, and a batch that
+- [x] Each agent-authorised leg still charges the grant's window once, and a batch that
       fails mid-way restores the window (extends the journal-rollback test).
-- [ ] `schema()` error catalog gains `BATCH_MIXED_CALLERS` with a remedy; the README
+- [x] `schema()` error catalog gains `BATCH_MIXED_CALLERS` with a remedy; the README
       "batch leg" limit and proposal §10's F4 bullet are removed/updated.
-- [ ] Model checker: existing batch action untouched; add one mixed-caller batch
+- [x] Model checker: existing batch action untouched; add one mixed-caller batch
       **attack** (must always be rejected and inert) and extend S6(d) to batches.
 
 ## Blocked / needs input
@@ -602,6 +602,9 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
   legal opinions, bank onboarding — business and regulatory work, not code.
 
 ## Session log
+
+- 2026-09-29 — Priority 7: closed both Priority 6 gaps. Spec written into this file unchecked and committed first; 19 tests in `test/delegation-gaps.test.js` written first, 13 red (the other 6 pin behaviour that must not change), then implemented. **7.1** a sweep registered under a grant stores `grant` (omitted for institution sweeps, so no state root moved); `#runSweeps` now chains, takes the headroom (per-instruction max and every ancestor's remaining window), moves `min(excess, headroom)`, and charges through `#charge` - the same helper `#authorize` now uses, extracted rather than copied. A dead chain suspends the sweep (reported in `sweepFires` as `suspended` with the reason; still registered; institution can cancel). **7.2** `tx_BATCH` collects each leg's effective caller (derived from its grant if agent-authorised, else declared, else `unspecified`), rejects `BATCH_MIXED_CALLERS` unless identical, and sets the outer result's caller from them; the outer batch's own declared caller is ignored because nothing signs it. Model checker: 3 new delegation actions (agent-registered sweep `s9`, an agent batch, a mixed-caller batch attack), the S6 oracle rewritten to walk blocks in order carrying what the action has already charged to each window, so batch legs and sweep firings are judged against what earlier ones left; two new planted bugs, plus the four earlier ones re-run against the bigger alphabet, all caught. Delegation model exhausted at depth 13: 1,767 states, 33,573 transitions, 25.1 s, zero failures; routine 40-action base run unchanged at 3,793 / 40,680. **One test expectation of my own was wrong, caught by running:** I asserted a child sweep would fire only on the *next* heartbeat after a parent transfer used up part of the shared cap, but sweeps also fire at the end of the transfer's own block, so the $500 moved in the same block; the kernel was right, the test was corrected. Full suite: 140/140 (was 119), ~67 s. Still open: demo agent keys are not persisted across restarts; nothing attests that an agent-key holder is software.
+
 
 - 2026-09-29 — Priority 6: agent-native access, all of 6.0-6.4, built from `poc/docs/agent-native-access-proposal.md` after Caleb signed off with all three recommended options (full grants build, sub-delegation now, spend counted against every ancestor's window). Spec written into this file unchecked and committed first, tests before code. **6.0** found while writing the proposal, not by a test: `tx_PAYMENT`'s queue entry rebuilt the stored tx without `caller`, so a queued-then-netted payment lost its attribution in state - fixed (caller kept only when not `unspecified`, so old state roots are unchanged), and the stale "nothing here distinguishes who is calling" header comment in `kernel.js` corrected. **6.1** `GRANT`/`REVOKE_GRANT`, `#authorize` (stands in for the `ops` signature on six grantable handlers; with no agent signature it *is* the old `#sig` call, so every existing path is byte-identical - confirmed by running all 76 old tests before and after, and `grants` is absent from `stateView()` until first used so no state root changed), `#chain` (revocation/expiry of any ancestor kills the chain, so cascade needs no enumeration), tumbling windows charged to every ancestor through the same undo journal, derived caller. 31 tests in `delegation.test.js`, written first and confirmed red (all but two failed on the missing API; the 6.0 one failed for the real reason, the dropped caller). **6.2** `submitSigned`/`schema()`/`grantsView()` on `Network` plus `POST /api/submit`, `GET /api/schema`, `GET /api/grants` on the demo server; 7 tests in `agent-interface.test.js`, red first; HTTP layer checked with curl on a fresh port (bad JSON, unsigned/expired instruction, schema, empty and filtered grants, bad issuer now a 400 not a 500) but **not** a fully signed instruction over HTTP, because the demo server holds every key and an outside caller cannot obtain one - that path is covered at the `submitSigned` level only. Dashboard block-log tag distinguishes a kernel-derived agent ("agent - grant") from a self-declared one. **6.3** unlike 5.1/M2 this gates authority, so it is model-checked: oracle `checkDelegation` (S6) written from the spec with the topology fixed by the model, 13 new actions, and grants added to the compared state so S2 catches window leaks. Adding the actions to the routine alphabet would have hit the 5,000-state cap at depth 5 and silently explored less of the original model, so the routine run stays at 40 actions (3,793 states / 40,680 transitions, unchanged) and delegation is searched on a focused 16-action alphabet: exhausted at depth 12 (989 states, 15,824 transitions, 11.6 s), zero failures; the combined 53-action run is capped and reported as a data point, not a proof. Four planted bugs, all caught. Mutation tests were written after the oracle, not red-first - honest about that in the charter. **Mistakes of my own, caught by running, not inspection:** a test helper defaulted a grant's expiry to one day and a window test advanced the clock a day plus a second, so the grant expired instead of the window resetting (moved the default to seven days); the quarantine test used a same-issuer `TRANSFER`, which the kernel never gates on quarantine (only cross-issuer movement checks it) - switched to `PAYMENT`; a test error message used `JSON.stringify` on an object holding a BigInt; and my first attempt to restructure the model alphabets was lost to a tooling failure (Bash unavailable for a stretch), which I noticed by reading the file back rather than assuming the edit had landed. Deferred and stated in the README: sweeps are gated only at registration; batch legs' derived caller is not surfaced on the outer result (F4); demo agent keys are not persisted across restarts. Full suite: 119/119 (was 76), ~59 s.
 

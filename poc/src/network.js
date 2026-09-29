@@ -30,6 +30,7 @@ export const ERROR_CATALOG = {
   ISSUER_QUARANTINED: { retryable: true, remedy: 'The issuer is quarantined by the graded halt. Retry after it is resumed.' },
   NETWORK_HALTED: { retryable: true, remedy: 'The network is halted. Retry after RESUME.' },
   VALUE_CAP_EXCEEDED: { retryable: false, remedy: 'Above the per-instruction network cap. Split the instruction.' },
+  BATCH_MIXED_CALLERS: { retryable: false, remedy: 'Every leg of a batch must have the same effective caller: all authorised by the same grant, or all signed by the institution with the same declared caller. Split it into one batch per caller.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
 };
 export const dollars = (n) => BigInt(Math.round(n * 100));
