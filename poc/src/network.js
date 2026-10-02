@@ -3,7 +3,7 @@
 // dashboard and tests drive. Nothing in the kernel depends on this file.
 
 import crypto from 'node:crypto';
-import { Ledger, GRANTABLE_TYPES } from './kernel.js';
+import { Ledger, GRANTABLE_TYPES, batchDigestOf } from './kernel.js';
 import { Bank } from './bank.js';
 import { canon, genKey, sign, verify, sha256, exportKey, importKey } from './crypto.js';
 import { Store } from './store.js';
@@ -19,9 +19,9 @@ export const ERROR_CATALOG = {
   GRANT_EXPIRED: { retryable: false, remedy: 'The grant or one of its ancestors passed its not_after time. Obtain a new grant.' },
   GRANT_WIDENS_PARENT: { retryable: false, remedy: 'A sub-grant may only narrow its parent: types, per-instruction max, window cap, counterparties and expiry must all be within the parent.' },
   GRANT_WRONG_ISSUER: { retryable: false, remedy: 'A grant only authorises the issuer that created it.' },
-  UNKNOWN_GRANT: { retryable: false, remedy: 'No grant with that id is on the ledger (check GET /api/grants).' },
+  UNKNOWN_GRANT: { retryable: false, remedy: 'No grant with that id is on the ledger (check GET /api/grants). Only an authenticated caller sees this (e.g. REVOKE_GRANT naming a missing target); a signature that names a grant that does not exist is reported as BAD_SIGNATURE, on purpose.' },
   CALLER_MISMATCH: { retryable: false, remedy: 'An agent-signed instruction cannot declare caller.kind human; omit caller or declare agent.' },
-  BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it.' },
+  BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it. An agent:<grant_id> signature for a grant that does not exist gets this same answer, so check the grant id and key against GET /api/grants.' },
   MISSING_SIGNATURE: { retryable: false, remedy: 'A required role signature is absent. See GET /api/schema for the roles this type needs.' },
   DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already processed: the original outcome stands. Do not resend; use a new inst_id for a new instruction.' },
   BAD_VALIDITY: { retryable: true, remedy: 'valid_until must be within 60 seconds of block time. Re-sign with a fresh valid_until and a NEW inst_id.' },
@@ -31,6 +31,9 @@ export const ERROR_CATALOG = {
   NETWORK_HALTED: { retryable: true, remedy: 'The network is halted. Retry after RESUME.' },
   VALUE_CAP_EXCEEDED: { retryable: false, remedy: 'Above the per-instruction network cap. Split the instruction.' },
   BATCH_MIXED_CALLERS: { retryable: false, remedy: 'Every leg of a batch must have the same effective caller: all authorised by the same grant, or all signed by the institution with the same declared caller. Split it into one batch per caller.' },
+  SWEEP_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that registered this sweep, or one of its ancestors, may cancel it. Ask the institution, or the registering grant itself, to cancel it.' },
+  ESCROW_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that locked this escrow, or one of its ancestors, may refund it. Ask the institution, or the locking grant itself, to refund it.' },
+  BATCH_LEG_MISBOUND: { retryable: false, remedy: 'This instruction was signed with a batch_digest binding it to a specific set and order of legs. Submit it inside exactly that batch, unchanged, or re-sign it with a new inst_id and no batch_digest to run it standalone.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
 };
 export const dollars = (n) => BigInt(Math.round(n * 100));
@@ -222,10 +225,12 @@ export class Network {
   // for THIS instruction. Not a new key or a new access class - whoever holds the role's key still
   // authenticates as that role. Included in the signed digest, so it is exactly as tamper-evident as
   // `payload`: relabelling it after signing invalidates every signature already on the instruction.
-  tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId, caller } = {}) {
-    const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, caller: caller || { kind: 'unspecified' }, sigs: {} };
+  // `batchDigest` (roadmap 8.4): binds this instruction to ride only inside the one batch whose
+  // legs hash to this digest (see `batchDigestOf` in kernel.js) - also part of the signed digest.
+  tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId, caller, batchDigest } = {}) {
+    const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, caller: caller || { kind: 'unspecified' }, batch_digest: batchDigest || null, sigs: {} };
     // sign using the same canonical message the kernel verifies
-    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller });
+    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller, batch_digest: t.batch_digest });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
   }
@@ -269,7 +274,7 @@ export class Network {
     const types = Object.getOwnPropertyNames(Ledger.prototype).filter((k) => k.startsWith('tx_')).map((k) => k.slice(3)).sort().map((type) => ({ type, grantable: GRANTABLE_TYPES.includes(type), signatures: SIG[type] || null }));
     return {
       version: 'depositx-poc-schema/1',
-      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller }', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution' },
+      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest }', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
       grantable_types: GRANTABLE_TYPES,
       types,
       errors: ERROR_CATALOG,
@@ -556,6 +561,15 @@ export class Network {
     const block = this.submit([this.tx('BATCH', { legs: legTxs }, [])]);
     this.pumpCore();
     return this.#res(block, { stage: 'batch' });
+  }
+  // Roadmap 8.4: builds a set of legs cryptographically bound to ride together, in this exact
+  // order, or not at all - each `spec` is `{ type, payload, roles, opts? }` (opts is whatever
+  // tx() takes, e.g. caller). inst_ids are decided up front (so the digest is fixed before
+  // anything is signed), the same two-pass a real signer has to do. Returns legs ready for batch().
+  buildBoundBatch(legSpecs) {
+    const instIds = legSpecs.map((s, i) => (s.opts && s.opts.instId) || `${s.type.toLowerCase()}-batchleg-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${i}`);
+    const digest = batchDigestOf(instIds);
+    return legSpecs.map((s, i) => this.tx(s.type, s.payload, s.roles, { ...(s.opts || {}), instId: instIds[i], batchDigest: digest }));
   }
 
   // External-CSD DvP (roadmap 4.2, 02-technical-implementation.md section 2.4): the bond

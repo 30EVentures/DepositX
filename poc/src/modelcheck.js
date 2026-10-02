@@ -82,8 +82,8 @@ const totalMoney = (net) => {
 const GK = { g1: genKey(), g2: genKey(), g3: genKey() };
 const TOPO = { g1: null, g2: 'g1', g3: 'g1' };
 const SWEEP_OWNER = { s9: 'g1' }; // the sweep only g1's agent ever registers (the institution's own is s1)
-const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT', 'REGISTER_SWEEP'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
-const G2 = { grantId: 'g2', issuer: 'MPL', label: 'sub agent', parent: 'g1', allowTypes: ['TRANSFER'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g2 };
+const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT', 'REGISTER_SWEEP', 'CANCEL_SWEEP'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
+const G2 = { grantId: 'g2', issuer: 'MPL', label: 'sub agent', parent: 'g1', allowTypes: ['TRANSFER', 'CANCEL_SWEEP'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g2 };
 const agentXfer = (net, gid, amt, opts) => net.submitSigned(net.agentTx(gid, 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(amt).toString() }, ['screen:MPL'], opts));
 const agentPay = (net, gid, amt) => net.submitSigned(net.agentTx(gid, 'PAYMENT', { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(amt).toString(), queueIfShort: false }, ['screen:MPL', 'accept:NSR']));
 
@@ -99,6 +99,11 @@ export const DELEGATION_ACTIONS = [
   { name: 'agent g1 transfer $3 co-signed by the institution (escalation)', kind: 'legit', run: (net) => agentXfer(net, 'g1', 3, { escalate: true }) },
   // roadmap 7.1: a sweep under g1 (keep $0, so it wants to move everything) - bounded by g1's headroom, suspended if g1 dies
   { name: 'agent g1 registers sweep s9 (acme -> harbour, keep $0)', kind: 'legit', run: (net) => net.submitSigned(net.agentTx('g1', 'REGISTER_SWEEP', { sweepId: 's9', from: 'MPL:acme', to: 'MPL:harbour', keepAmount: '0' }, [])) },
+  // roadmap 8.3: only the grant that registered a sweep (or its ancestor) may cancel it. g1 is s9's
+  // owner and g1's own ancestor-of-itself case is covered by the "same grant" branch; g2 is a
+  // DESCENDANT of g1, not an ancestor, so g2 cancelling g1's sweep must always be refused.
+  { name: 'agent g1 cancels sweep s9 (the grant that registered it)', kind: 'legit', run: (net) => net.submitSigned(net.agentTx('g1', 'CANCEL_SWEEP', { sweepId: 's9' }, [])) },
+  { name: 'ATTACK agent g2 cancels sweep s9 (owned by g1 - g2 is a descendant, not an ancestor)', kind: 'attack', run: (net) => net.submitSigned(net.agentTx('g2', 'CANCEL_SWEEP', { sweepId: 's9' }, [])) },
   // roadmap 7.2: a batch of one grant's legs is fine; one that mixes callers must always be refused
   { name: 'batch: two g1 transfers $1', kind: 'legit', run: (net) => net.submitSigned(net.tx('BATCH', { legs: [net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL']), net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL'])] }, [])) },
   { name: 'ATTACK batch mixing a g1 leg with an institution-signed leg', kind: 'attack', run: (net) => net.submitSigned(net.tx('BATCH', { legs: [net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL']), net.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['ops:MPL', 'screen:MPL'])] }, [])) },
@@ -162,6 +167,16 @@ function checkDelegation(pre, net) {
       let anc = false;
       for (let c = TOPO[tx.payload.grant_id]; c; c = TOPO[c]) if (c === gid) anc = true;
       if (!anc || !isLive(chain, time)) out.push(`${gid} revoked ${tx.payload.grant_id} but is not a live ancestor`);
+      return;
+    }
+    // roadmap 8.3: CANCEL_SWEEP must be the grant that registered the sweep, or a strict ancestor of
+    // it - unlike REVOKE_GRANT, the grant itself (not just an ancestor) is allowed to cancel its own.
+    if (tx.type === 'CANCEL_SWEEP') {
+      const owner = SWEEP_OWNER[tx.payload.sweepId];
+      let owns = false;
+      for (let c = owner; c; c = TOPO[c]) if (c === gid) { owns = true; break; }
+      if (!owns) out.push(`${gid} cancelled sweep ${tx.payload.sweepId} owned by ${owner || 'the institution'}, which it is neither nor an ancestor of`);
+      if (!isLive(chain, time)) out.push(`accepted CANCEL_SWEEP under dead grant ${gid}`);
       return;
     }
     const leaf = chain[0];

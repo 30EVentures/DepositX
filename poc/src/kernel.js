@@ -48,6 +48,10 @@ const GRANTABLE = new Set(GRANTABLE_TYPES);
 export const MAX_GRANT_DEPTH = 5; // a root grant plus four levels of sub-grants
 const MAX_WINDOW_S = 30 * 86400;
 const ACCT_RE = /^[A-Z]{3}:[a-z0-9_:-]{1,60}$/;
+// The issuer an account id names, read from the id string alone (ids are `<issuer>:<holder>`). Pure function of
+// the caller's own input - it consults no state - so a handler can name the signature it needs BEFORE it looks
+// the account up, and "no such account" cannot be told apart from "wrong signature" (X1).
+const acctIssuer = (id) => (typeof id === 'string' ? id.split(':')[0] : '');
 
 // Undo journal: every mutation inside a transaction is recorded so a failed
 // transaction leaves state byte-identical (atomicity: all legs or none).
@@ -92,11 +96,16 @@ const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
   if (!m) {
-    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' } });
+    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' }, batch_digest: tx.batch_digest || null });
     msgCache.set(tx, m);
   }
   return m;
 }
+
+// Roadmap 8.4: a hash over the exact, ordered inst_ids a leg was signed to ride with. Order-
+// sensitive, since batch execution order is semantically meaningful here (an earlier leg's
+// settlement-position effect can gate a later leg) - reordering the same legs must not match.
+export const batchDigestOf = (instIds) => sha256(canon(instIds));
 
 // Par legs must conserve: tokens burned at the payer issuer == tokens minted at the payee issuer,
 // and each issuer's settlement-position move equals its token move. (Invariant P3.)
@@ -192,8 +201,26 @@ export class Ledger {
     const sig = tx.sigs && tx.sigs[role];
     need(sig, 'MISSING_SIGNATURE', `missing signature: ${role}`);
     const pub = this.#pubFor(role);
-    need(pub, 'BAD_SIGNATURE', `unknown signer role: ${role}`);
+    // An `agent:<grant_id>` role names a grant, so "no such grant" must read exactly like "wrong key" (X1):
+    // otherwise the message alone tells an unauthenticated caller which grant ids exist.
+    need(pub, 'BAD_SIGNATURE', role.startsWith('agent:') ? `bad signature: ${role}` : `unknown signer role: ${role}`);
     need(verify(pub, messageOf(tx, this.chainId), sig), 'BAD_SIGNATURE', `bad signature: ${role}`);
+  }
+  // Pre-authentication gate for handlers whose required signer is only known from STATE (an escrow's release
+  // role, a sweep's or a grant's owning issuer). The object cannot be looked up before the caller is
+  // authenticated, so first require that SOME presented signature verifies against a key that exists without
+  // consulting that object (genesis role keys, or a grant's agent key). Absent object and present-but-not-yours
+  // object are therefore the same answer to a caller who cannot sign. The error depends only on the caller's
+  // own bytes. Bounded to the first 8 signatures so it cannot be used to burn verification time.
+  #gate(tx) {
+    const entries = Object.entries(tx.sigs || {}).slice(0, 8);
+    need(entries.length > 0, 'MISSING_SIGNATURE', 'missing signature: this instruction must be signed');
+    const msg = messageOf(tx, this.chainId);
+    const ok = entries.some(([role, sig]) => {
+      const pub = this.#pubFor(role);
+      return typeof pub === 'string' && typeof sig === 'string' && verify(pub, msg, sig);
+    });
+    need(ok, 'BAD_SIGNATURE', 'no signature on this instruction verifies');
   }
 
   // ---------------------------------------------------------------- agent delegation (roadmap 6.1)
@@ -220,15 +247,32 @@ export class Ledger {
   // check, unchanged. With `agent:<grant_id>`: verify the agent key, derive the caller, then grade the
   // instruction against the grant - ALLOW (consume window), ESCALATE (also needs the institution's own
   // ops signature) or DENY. `amount` is lazy so the legacy path's error precedence is untouched.
-  #authorize(tx, issuerId, { amount = null, accounts = [], time, j }) {
+  //
+  // X1 (no pre-authentication leak): `issuerId` is either a string DERIVED FROM THE CALLER'S OWN INPUT (see
+  // acctIssuer) or, when the owning issuer lives in state (an escrow, sweep or grant record), a resolver
+  // `() => issuerId` that may throw a specific error. A resolver runs only AFTER the caller is authenticated:
+  // for the institution path behind #gate, for the agent path after the agent signature verifies. `accounts`
+  // may be a resolver for the same reason. The agent signature is verified BEFORE the grant's issuer is
+  // compared, and a grant that does not exist fails exactly like a wrong key (BAD_SIGNATURE), so neither the
+  // grant's existence nor its owner is observable without its key.
+  #authorize(tx, issuerOrResolve, { amount = null, accounts = [], time, j }) {
     const agentRoles = Object.keys(tx.sigs || {}).filter((r) => r.startsWith('agent:'));
-    if (agentRoles.length === 0) return this.#sig(tx, `ops:${issuerId}`);
+    if (agentRoles.length === 0) {
+      let issuerId = issuerOrResolve;
+      if (typeof issuerOrResolve === 'function') {
+        this.#gate(tx);
+        issuerId = issuerOrResolve();
+      }
+      return this.#sig(tx, `ops:${issuerId}`);
+    }
     need(agentRoles.length === 1, 'MULTIPLE_AGENT_SIGS', 'at most one agent signature per instruction');
     const gid = agentRoles[0].slice('agent:'.length);
+    this.#sig(tx, agentRoles[0]); // an unknown grant has no key: BAD_SIGNATURE, indistinguishable from a wrong key
+    const issuerId = typeof issuerOrResolve === 'function' ? issuerOrResolve() : issuerOrResolve;
+    if (typeof accounts === 'function') accounts = accounts();
     const g = this.s.grants.get(gid);
-    need(g, 'UNKNOWN_GRANT', `unknown grant ${gid}`);
+    need(g, 'UNKNOWN_GRANT', `unknown grant ${gid}`); // unreachable: a verified agent signature implies the grant exists
     need(g.issuer === issuerId, 'GRANT_WRONG_ISSUER', `grant ${gid} belongs to ${g.issuer}, not ${issuerId}`);
-    this.#sig(tx, agentRoles[0]);
     const declared = tx.caller && tx.caller.kind;
     need(!declared || declared === 'unspecified' || declared === 'agent', 'CALLER_MISMATCH', 'an agent-signed instruction cannot declare itself human');
     this.#derived = { kind: 'agent', grant_id: gid, label: g.label };
@@ -269,6 +313,17 @@ export class Ledger {
     }
     return room < 0n ? 0n : room;
   }
+  // Shared by CANCEL_SWEEP and ESCROW_REFUND (roadmap 8.3): the acting grant must be the grant
+  // that registered/locked the record, or a strict ancestor of it - not merely any live grant with
+  // the right type and counterparties, which is all #authorize alone checks. Mirrors
+  // tx_REVOKE_GRANT's own ancestor walk. A record with no grant on file (the institution acted
+  // directly) matches no agent grant at all, by construction (the loop never starts).
+  #grantOwnsRecord(actingGid, recordedGid) {
+    for (let cur = recordedGid && this.s.grants.get(recordedGid); cur; cur = cur.parent && this.s.grants.get(cur.parent)) {
+      if (cur.id === actingGid) return true;
+    }
+    return false;
+  }
 
   // The caller worth recording on a stored copy of `tx`: derived from a grant, else self-attested,
   // else nothing (omitted, so state roots of chains that never used callers are unchanged).
@@ -292,6 +347,13 @@ export class Ledger {
     const a = this.#account(id);
     need(a.status === 'active', 'ACCOUNT_FROZEN', `account ${id} is frozen`);
     need(a.kycExpires > time, 'KYC_EXPIRED', `KYC attestation for ${id} expired`);
+    return a;
+  }
+  // #live for an account whose issuer was derived from its id (acctIssuer) so the signature could be checked
+  // first. Account ids are always `<issuer>:<holder>`, so the derived issuer is the real one; this asserts it.
+  #liveAs(id, time, issuerId) {
+    const a = this.#live(id, time);
+    need(a.issuer === issuerId, 'WRONG_ISSUER', `account ${id} does not belong to ${issuerId}`);
     return a;
   }
   #cap(amt) {
@@ -439,9 +501,10 @@ export class Ledger {
   // Redeem burns on the ledger FIRST (ledger-first ordering: the customer's claim is never lost).
   tx_REDEEM(tx, time, j, events) {
     const p = tx.payload;
-    const acct = this.#live(p.account, time);
+    const ai = acctIssuer(p.account);
+    this.#sig(tx, `ops:${ai}`); // before any account lookup (X1)
+    const acct = this.#liveAs(p.account, time, ai);
     const iss = this.#issuer(acct.issuer);
-    this.#sig(tx, `ops:${iss.id}`);
     need(iss.status === 'ACTIVE', 'ISSUER_QUARANTINED');
     const x = parseAmount(p.amount);
     this.#cap(x);
@@ -507,26 +570,33 @@ export class Ledger {
   }
 
   tx_FREEZE_ACCOUNT(tx, time, j, events) {
+    const ai = acctIssuer(tx.payload.account);
+    this.#sig(tx, `ops:${ai}`); // before any account lookup (X1)
     const a = this.#account(tx.payload.account);
-    this.#sig(tx, `ops:${a.issuer}`);
+    need(a.issuer === ai, 'WRONG_ISSUER');
     j.field(a, 'status', 'frozen');
     events.push({ type: 'ACCOUNT_FROZEN', account: a.id });
   }
   tx_UNFREEZE_ACCOUNT(tx, time, j, events) {
+    const ai = acctIssuer(tx.payload.account);
+    this.#sig(tx, `ops:${ai}`); // before any account lookup (X1)
     const a = this.#account(tx.payload.account);
-    this.#sig(tx, `ops:${a.issuer}`);
+    need(a.issuer === ai, 'WRONG_ISSUER');
     j.field(a, 'status', 'active');
     events.push({ type: 'ACCOUNT_UNFROZEN', account: a.id });
   }
 
   tx_TRANSFER(tx, time, j, events) {
     const p = tx.payload;
-    const from = this.#live(p.from, time);
+    // X1: every required signature is checked before any account is looked up, so an unauthenticated caller
+    // cannot tell a missing, frozen or KYC-expired account from a healthy one.
+    const fi = acctIssuer(p.from);
+    this.#authorize(tx, fi, { amount: () => parseAmount(p.amount), accounts: [p.from, p.to], time, j });
+    this.#sig(tx, `screen:${fi}`);
+    const from = this.#liveAs(p.from, time, fi);
     const to = this.#live(p.to, time);
     need(from.issuer === to.issuer, 'USE_PAYMENT', 'cross-issuer payments use PAYMENT');
     need(from.id !== to.id, 'SELF_TRANSFER');
-    this.#authorize(tx, from.issuer, { amount: () => parseAmount(p.amount), accounts: [from.id, to.id], time, j });
-    this.#sig(tx, `screen:${from.issuer}`);
     const x = parseAmount(p.amount);
     this.#cap(x);
     this.#moveCash(j, from, to, x, { instId: tx.inst_id, time, events });
@@ -537,12 +607,14 @@ export class Ledger {
   // If the payer's position is short and the sender allowed queueing, nothing is debited: it waits for netting.
   tx_PAYMENT(tx, time, j, events) {
     const p = tx.payload;
-    const from = this.#live(p.from, time);
-    const to = this.#live(p.to, time);
+    const fi = acctIssuer(p.from);
+    const ti = acctIssuer(p.to);
+    this.#authorize(tx, fi, { amount: () => parseAmount(p.amount), accounts: [p.from, p.to], time, j });
+    this.#sig(tx, `screen:${fi}`);
+    if (fi !== ti) this.#sig(tx, `accept:${ti}`); // same issuer is USE_TRANSFER below; nothing to accept
+    const from = this.#liveAs(p.from, time, fi);
+    const to = this.#liveAs(p.to, time, ti);
     need(from.issuer !== to.issuer, 'USE_TRANSFER', 'same-issuer payments use TRANSFER');
-    this.#authorize(tx, from.issuer, { amount: () => parseAmount(p.amount), accounts: [from.id, to.id], time, j });
-    this.#sig(tx, `screen:${from.issuer}`);
-    this.#sig(tx, `accept:${to.issuer}`);
     const x = parseAmount(p.amount);
     this.#cap(x);
     const A = this.#issuer(from.issuer);
@@ -560,14 +632,16 @@ export class Ledger {
   // Delivery versus payment: security leg and cash leg in one all-or-nothing instruction.
   tx_DVP(tx, time, j, events) {
     const p = tx.payload;
-    const seller = this.#live(p.seller, time);
-    const buyer = this.#live(p.buyer, time);
+    const bi = acctIssuer(p.buyer);
+    const si = acctIssuer(p.seller);
+    this.#sig(tx, `ops:${bi}`); // all four signatures before either account is looked up (X1)
+    this.#sig(tx, `screen:${bi}`);
+    this.#sig(tx, `ops:${si}`);
+    if (si !== bi) this.#sig(tx, `accept:${si}`);
+    const seller = this.#liveAs(p.seller, time, si);
+    const buyer = this.#liveAs(p.buyer, time, bi);
     need(seller.id !== buyer.id, 'SELF_TRADE');
     need(this.s.securities.has(p.secId), 'UNKNOWN_SECURITY');
-    this.#sig(tx, `ops:${buyer.issuer}`);
-    this.#sig(tx, `screen:${buyer.issuer}`);
-    this.#sig(tx, `ops:${seller.issuer}`);
-    if (seller.issuer !== buyer.issuer) this.#sig(tx, `accept:${seller.issuer}`);
     const qty = parseAmount(p.qty, 'BAD_QTY');
     const cash = parseAmount(p.cash);
     this.#cap(cash);
@@ -587,8 +661,14 @@ export class Ledger {
   // escrow account -> original payer, which for a cross-issuer lock is a reverse Convert).
   tx_ESCROW_LOCK(tx, time, j, events) {
     const p = tx.payload;
-    const from = this.#live(p.from, time);
+    const fi = acctIssuer(p.from);
+    const ti = acctIssuer(p.to);
+    this.#authorize(tx, fi, { amount: () => parseAmount(p.amount), accounts: [p.from, p.to], time, j }); // X1: signatures before any lookup
+    this.#sig(tx, `screen:${fi}`);
+    if (fi !== ti) this.#sig(tx, `accept:${ti}`);
+    const from = this.#liveAs(p.from, time, fi);
     const to = this.#account(p.to);
+    need(to.issuer === ti, 'WRONG_ISSUER');
     need(typeof p.escrowId === 'string' && ID_RE.test(p.escrowId), 'BAD_ESCROW_ID');
     need(!this.s.escrows.has(p.escrowId), 'ESCROW_EXISTS');
     need(Number.isInteger(p.expiresAt) && p.expiresAt > time, 'BAD_EXPIRY');
@@ -596,9 +676,6 @@ export class Ledger {
     need(this.#pubFor(releaseRole) !== undefined, 'BAD_RELEASE_ROLE');
     const eventName = p.eventName === undefined ? null : p.eventName;
     if (eventName !== null) need(this.#pubFor(`event:${eventName}`) !== undefined, 'UNKNOWN_EVENT');
-    this.#authorize(tx, from.issuer, { amount: () => parseAmount(p.amount), accounts: [from.id, to.id], time, j });
-    this.#sig(tx, `screen:${from.issuer}`);
-    if (from.issuer !== to.issuer) this.#sig(tx, `accept:${to.issuer}`);
     const x = parseAmount(p.amount);
     this.#cap(x);
     const escrowAcctId = `${to.issuer}:escrow:${p.escrowId}`;
@@ -608,7 +685,10 @@ export class Ledger {
     }
     const escrowAcct = this.s.accounts.get(escrowAcctId);
     this.#moveCash(j, from, escrowAcct, x, { instId: tx.inst_id, time, events });
-    j.set(this.s.escrows, p.escrowId, { from: from.id, to: to.id, amount: x, expiresAt: p.expiresAt, releaseRole, eventName, escrowAccountId: escrowAcctId });
+    // Locked under a grant: recorded so ESCROW_REFUND can later require the refunding grant to be
+    // this one or an ancestor of it (roadmap 8.3). Omitted otherwise, matching sweeps' own pattern
+    // (roadmap 7.1), so existing state roots for chains that never used grants are unchanged.
+    j.set(this.s.escrows, p.escrowId, { from: from.id, to: to.id, amount: x, expiresAt: p.expiresAt, releaseRole, eventName, escrowAccountId: escrowAcctId, ...(this.#derived ? { grant: this.#derived.grant_id } : {}) });
     events.push({ type: 'ESCROW_LOCKED', escrowId: p.escrowId, from: from.id, to: to.id, amount: x.toString(), eventGated: eventName !== null });
   }
 
@@ -624,13 +704,20 @@ export class Ledger {
   }
   tx_ESCROW_RELEASE(tx, time, j, events) {
     const p = tx.payload;
+    this.#gate(tx); // the required signer is in the escrow record: authenticate before looking it up (X1)
     const rec = this.s.escrows.get(p.escrowId);
     need(rec, 'UNKNOWN_ESCROW');
+    this.#sig(tx, rec.releaseRole);
     // an event-gated escrow can ONLY be released by EVENT_RELEASE - otherwise the payer's own
     // default releaseRole would let them release their own PayOnEvent escrow unconditionally,
     // defeating the point of gating it on an event in the first place.
     need(rec.eventName === null, 'USE_EVENT_RELEASE', 'this escrow is event-gated: use EVENT_RELEASE');
-    this.#sig(tx, rec.releaseRole);
+    // Roadmap 8.2: ESCROW_RELEASE is deliberately not grantable (release of already-locked funds
+    // never goes through the envelope/window machinery), but a releaseRole naming an agent grant
+    // must still stop working the moment that grant is revoked or expired - #sig alone only checks
+    // the raw signature, never liveness. Reuse the same chain check #authorize already applies.
+    // (X1: runs after #sig, so grant liveness is only ever reported to the authenticated release role.)
+    if (rec.releaseRole.startsWith('agent:')) this.#chain(rec.releaseRole.slice('agent:'.length), time);
     this.#releaseEscrow(rec, p.escrowId, time, j, events, 'ESCROW_RELEASED');
   }
 
@@ -639,11 +726,14 @@ export class Ledger {
   // signature for a different (even genuinely valid) event name can never release this escrow.
   tx_EVENT_RELEASE(tx, time, j, events) {
     const p = tx.payload;
+    // X1: the oracle signature is checked under the event the CALLER names (a genesis key, no state), then the
+    // escrow is looked up and must be gated on exactly that event. A release succeeds iff the old rule held:
+    // the escrow's own eventName equals p.event and event:<eventName> signed. Gating and the event name stay hidden.
+    this.#sig(tx, `event:${p.event}`);
     const rec = this.s.escrows.get(p.escrowId);
     need(rec, 'UNKNOWN_ESCROW');
     need(rec.eventName !== null, 'NOT_EVENT_GATED');
     need(p.event === rec.eventName, 'EVENT_MISMATCH');
-    this.#sig(tx, `event:${rec.eventName}`);
     this.#releaseEscrow(rec, p.escrowId, time, j, events, 'ESCROW_EVENT_RELEASED');
   }
 
@@ -652,11 +742,19 @@ export class Ledger {
   // path used at lock time; the beneficiary issuer's original "accept" already covers this.
   tx_ESCROW_REFUND(tx, time, j, events) {
     const p = tx.payload;
-    const rec = this.s.escrows.get(p.escrowId);
-    need(rec, 'UNKNOWN_ESCROW');
+    // X1: the signer is the payer's issuer, which lives in the escrow record. Authenticate first (resolver).
+    let rec;
+    this.#authorize(tx, () => {
+      rec = this.s.escrows.get(p.escrowId);
+      need(rec, 'UNKNOWN_ESCROW');
+      return acctIssuer(rec.from);
+    }, { accounts: () => [rec.from, rec.to], time, j });
     need(time >= rec.expiresAt, 'ESCROW_NOT_EXPIRED');
     const from = this.#live(rec.from, time);
-    this.#authorize(tx, from.issuer, { accounts: [rec.from, rec.to], time, j });
+    // Roadmap 8.3: #authorize alone only checks the acting grant is live, allows ESCROW_REFUND, and
+    // (if set) lists the right counterparties - not that it is the grant that locked THIS escrow.
+    // (X1: the ownership check stays, but runs only after #authorize has verified the signature.)
+    if (this.#derived) need(this.#grantOwnsRecord(this.#derived.grant_id, rec.grant), 'ESCROW_WRONG_GRANT', 'only the grant that locked this escrow, or one of its ancestors, may refund it');
     const escrowAcct = this.#account(rec.escrowAccountId);
     j.del(this.s.escrows, p.escrowId);
     if (from.issuer === escrowAcct.issuer) {
@@ -677,9 +775,13 @@ export class Ledger {
   tx_BATCH(tx, time, j, events) {
     const p = tx.payload;
     need(Array.isArray(p.legs) && p.legs.length > 0, 'BATCH_EMPTY');
+    // Roadmap 8.4: recomputed over exactly the legs actually present, in order. A leg signed with a
+    // batch_digest only matches this if it is riding with precisely the set and order it was signed
+    // for - #checkEnvelope rejects any mismatch, including a standalone or reordered/subset relay.
+    const digest = batchDigestOf(p.legs.map((l) => l && l.inst_id));
     const callers = [];
     for (const leg of p.legs) {
-      const h = this.#checkEnvelope(leg, time);
+      const h = this.#checkEnvelope(leg, time, digest);
       need(leg.type !== 'BATCH', 'BATCH_NO_NESTING');
       h.call(this, leg, time, j, events);
       j.set(this.s.dedup, leg.inst_id, time);
@@ -700,11 +802,13 @@ export class Ledger {
   // position or cross-issuer accept signature is ever in question.
   tx_REGISTER_SWEEP(tx, time, j, events) {
     const p = tx.payload;
+    const fi = acctIssuer(p.from);
+    this.#authorize(tx, fi, { accounts: [p.from, p.to], time, j }); // X1: signature before any account lookup
     const from = this.#account(p.from);
     const to = this.#account(p.to);
+    need(from.issuer === fi, 'WRONG_ISSUER');
     need(from.issuer === to.issuer, 'SWEEP_SAME_ISSUER_ONLY');
     need(from.id !== to.id, 'SELF_TRANSFER');
-    this.#authorize(tx, from.issuer, { accounts: [from.id, to.id], time, j });
     need(typeof p.sweepId === 'string' && ID_RE.test(p.sweepId), 'BAD_SWEEP_ID');
     need(!this.s.sweeps.has(p.sweepId), 'SWEEP_EXISTS');
     const keep = parseNonNegAmount(p.keepAmount);
@@ -715,10 +819,16 @@ export class Ledger {
   }
   tx_CANCEL_SWEEP(tx, time, j, events) {
     const p = tx.payload;
-    const rec = this.s.sweeps.get(p.sweepId);
-    need(rec, 'UNKNOWN_SWEEP');
-    const from = this.#account(rec.from);
-    this.#authorize(tx, from.issuer, { accounts: [rec.from, rec.to], time, j });
+    let rec;
+    this.#authorize(tx, () => {
+      rec = this.s.sweeps.get(p.sweepId);
+      need(rec, 'UNKNOWN_SWEEP');
+      return acctIssuer(rec.from);
+    }, { accounts: () => [rec.from, rec.to], time, j }); // X1: authenticate before the sweep is looked up
+    // Roadmap 8.3: #authorize alone only checks the acting grant is live, allows CANCEL_SWEEP, and
+    // (if set) lists the right counterparties - not that it is the grant that registered THIS sweep.
+    // (X1: the ownership check stays, but runs only after the signature has verified.)
+    if (this.#derived) need(this.#grantOwnsRecord(this.#derived.grant_id, rec.grant), 'SWEEP_WRONG_GRANT', 'only the grant that registered this sweep, or one of its ancestors, may cancel it');
     j.del(this.s.sweeps, p.sweepId);
     events.push({ type: 'SWEEP_CANCELLED', sweepId: p.sweepId });
   }
@@ -727,8 +837,7 @@ export class Ledger {
   tx_GRANT(tx, time, j, events) {
     const p = tx.payload;
     need(typeof p.grant_id === 'string' && ID_RE.test(p.grant_id), 'BAD_GRANT_ID');
-    need(!this.s.grants.has(p.grant_id), 'GRANT_EXISTS');
-    const iss = this.#issuer(p.issuer);
+    const iss = this.#issuer(p.issuer); // the issuer set is fixed at genesis and public, so this is not state (X1)
     const parentId = p.parent === undefined ? null : p.parent;
     let chain = [];
     if (parentId === null) {
@@ -739,6 +848,7 @@ export class Ledger {
       chain = this.#chain(parentId, time);
       need(chain.length < MAX_GRANT_DEPTH, 'GRANT_TOO_DEEP', `at most ${MAX_GRANT_DEPTH} levels`);
     }
+    need(!this.s.grants.has(p.grant_id), 'GRANT_EXISTS'); // only after the signer is authenticated (X1)
     need(typeof p.agent_key === 'string' && /^[0-9a-f]{88}$/.test(p.agent_key), 'BAD_AGENT_KEY');
     need(p.label === undefined || (typeof p.label === 'string' && p.label.length <= 80), 'BAD_GRANT_LABEL');
     need(Array.isArray(p.allow_types) && p.allow_types.length > 0 && p.allow_types.every((x) => typeof x === 'string'), 'GRANT_BAD_TYPES');
@@ -769,22 +879,31 @@ export class Ledger {
   }
   tx_REVOKE_GRANT(tx, time, j, events) {
     const p = tx.payload;
+    // X1: who may revoke (the owning issuer, or an ancestor grant) lives in state, so the caller is authenticated
+    // BEFORE the grant is looked up. Institution path: behind #gate. Agent path: the agent signature first
+    // (an unknown grant fails like a wrong key), only then the target, its revocation state and its ancestry.
+    const agentRoles = Object.keys(tx.sigs || {}).filter((r) => r.startsWith('agent:'));
+    if (agentRoles.length === 0) {
+      this.#gate(tx);
+      const g = this.s.grants.get(p.grant_id);
+      need(g, 'UNKNOWN_GRANT');
+      this.#sig(tx, `ops:${g.issuer}`);
+      need(!g.revoked, 'GRANT_ALREADY_REVOKED');
+      j.set(this.s.grants, g.id, { ...g, revoked: true });
+      events.push({ type: 'GRANT_REVOKED', grantId: g.id });
+      return;
+    }
+    need(agentRoles.length === 1, 'MULTIPLE_AGENT_SIGS');
+    const by = agentRoles[0].slice('agent:'.length);
+    this.#sig(tx, agentRoles[0]);
     const g = this.s.grants.get(p.grant_id);
     need(g, 'UNKNOWN_GRANT');
     need(!g.revoked, 'GRANT_ALREADY_REVOKED');
-    const agentRoles = Object.keys(tx.sigs || {}).filter((r) => r.startsWith('agent:'));
-    if (agentRoles.length === 0) {
-      this.#sig(tx, `ops:${g.issuer}`);
-    } else {
-      need(agentRoles.length === 1, 'MULTIPLE_AGENT_SIGS');
-      const by = agentRoles[0].slice('agent:'.length);
-      const ancestors = [];
-      for (let cur = g.parent && this.s.grants.get(g.parent); cur; cur = cur.parent && this.s.grants.get(cur.parent)) ancestors.push(cur.id);
-      need(ancestors.includes(by), 'REVOKE_NOT_AUTHORISED', 'only the institution or an ancestor grant may revoke');
-      this.#sig(tx, agentRoles[0]);
-      this.#chain(by, time); // the revoking ancestor must itself still be live
-      this.#derived = { kind: 'agent', grant_id: by, label: this.s.grants.get(by).label };
-    }
+    const ancestors = [];
+    for (let cur = g.parent && this.s.grants.get(g.parent); cur; cur = cur.parent && this.s.grants.get(cur.parent)) ancestors.push(cur.id);
+    need(ancestors.includes(by), 'REVOKE_NOT_AUTHORISED', 'only the institution or an ancestor grant may revoke');
+    this.#chain(by, time); // the revoking ancestor must itself still be live
+    this.#derived = { kind: 'agent', grant_id: by, label: this.s.grants.get(by).label };
     j.set(this.s.grants, g.id, { ...g, revoked: true });
     events.push({ type: 'GRANT_REVOKED', grantId: g.id });
   }
@@ -884,11 +1003,15 @@ export class Ledger {
   // The generic checks every instruction gets, whether submitted at the top level or as one
   // leg of a BATCH (T7): well-formed envelope, fresh inst_id (dedup), a real handler, and the
   // halt gate. Returns the handler so the caller executes it against its own journal/events.
-  #checkEnvelope(tx, time) {
+  // `batchDigest` (roadmap 8.4) is the digest of whichever batch is CURRENTLY executing this tx -
+  // null at the top level. A leg whose own signed `batch_digest` does not match (including a leg
+  // with none, running inside a batch that itself has no matching claim) is refused outright.
+  #checkEnvelope(tx, time, batchDigest = null) {
     need(tx && typeof tx === 'object' && typeof tx.type === 'string', 'MALFORMED');
     need(typeof tx.inst_id === 'string' && tx.inst_id.length >= 8 && tx.inst_id.length <= 64, 'BAD_INST_ID');
     need(Number.isInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
     need(!this.s.dedup.has(tx.inst_id), 'DUPLICATE_INSTRUCTION');
+    need(!tx.batch_digest || tx.batch_digest === batchDigest, 'BATCH_LEG_MISBOUND', 'this instruction was signed to ride only inside a specific batch, and this is not it');
     const h = this['tx_' + tx.type];
     need(typeof h === 'function' && !tx.type.startsWith('_'), 'UNKNOWN_TYPE');
     if (this.s.halt) need(['RESUME', 'ATTEST', 'REPORT_PAR_BREAK'].includes(tx.type), 'NETWORK_HALTED', `network halted: ${this.s.halt.reason}`);

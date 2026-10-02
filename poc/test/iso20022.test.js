@@ -16,6 +16,18 @@ test('pacs.008 in, pacs.002 out: a cross-bank payment settles and the report car
   assert.deepEqual(n.ledger.checkInvariants(n.ledger.s.time).violations, []);
 });
 
+// Roadmap 8.1: consensus in this PoC is simulated in one process (network.js #makeBlock -
+// all four validator keys sign every block; nothing can ever disagree), so the pacs.002
+// output must not claim real "consensus finality" - an agent consuming this message could
+// reasonably read that as a guarantee this PoC does not provide.
+test('the ACSC report does not overclaim real consensus finality', () => {
+  const n = new Network();
+  const out = n.pacs008(samplePacs008({ amount: '10.00' }));
+  assert.equal(status(out), 'ACSC');
+  assert.doesNotMatch(out, /\bconsensus finality\b/i, 'must not claim real consensus finality - this PoC\'s consensus is simulated in one process');
+  assert.match(out, /simulated consensus/i, 'must say plainly that consensus is simulated');
+});
+
 test('the UETR is the idempotency key: resubmitting the same message is rejected as a duplicate, not paid twice', () => {
   const n = new Network();
   const xml = samplePacs008({ amount: '100.00' });
