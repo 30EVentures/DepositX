@@ -221,14 +221,16 @@ test('DENY: an expired grant', () => {
   assert.equal(one(n, xfer(n, 'sweeper-1', 1)).error, 'GRANT_EXPIRED');
 });
 
-test('an agent key cannot authorise for a different issuer, and an unknown grant is rejected', () => {
+test('an agent key cannot authorise for a different issuer, and an unknown grant is rejected (as a bad signature)', () => {
   const n = setup(); // MPL grant
   const t = n.agentTx('sweeper-1', 'TRANSFER', { from: 'NSR:cedar', to: 'NSR:pinnacle', amount: dollars(1).toString() }, ['screen:NSR']);
   assert.equal(one(n, t).error, 'GRANT_WRONG_ISSUER');
   const u = xfer(n, 'sweeper-1', 1);
   u.sigs['agent:nope'] = u.sigs['agent:sweeper-1'];
   delete u.sigs['agent:sweeper-1'];
-  assert.equal(one(n, u).error, 'UNKNOWN_GRANT');
+  // X1: a signature naming a grant that does not exist is BAD_SIGNATURE, exactly what a wrong key on a real grant
+  // gets, so an unauthenticated caller cannot enumerate grant ids. (It was UNKNOWN_GRANT before the fix.)
+  assert.equal(one(n, u).error, 'BAD_SIGNATURE');
 });
 
 test('a forged agent signature (another key) is BAD_SIGNATURE', () => {

@@ -267,3 +267,36 @@ commit shows the same spread, so it is not caused by this pass. The earlier-reco
 roadmap 5-7 and is not directly comparable. The likely cause is wall-clock time leaking into which
 representative of an aliased state is explored first; it was not investigated further. The routine depth-5
 figure is stable (3,793). Treat depth-6 state counts as accurate to roughly two states.
+
+### Hardening X1: authority is checked before state is read (pre-authentication leak)
+
+P6 says who may move a balance; it did not say what an unauthenticated caller may learn. Before X1 the
+handlers resolved accounts, escrows, sweeps and grants before verifying a signature, so `POST /api/submit`
+leaked, through the error code alone, which accounts exist, which are frozen or KYC-expired, which grant ids
+exist and which issuer owns them. Now: (a) a signature the handler needs is named from the caller's own input
+(an account id carries its issuer) and verified before any lookup; (b) when the signer lives in state, a
+`#gate` first needs one valid signature from a key that exists independent of that object; (c) an
+`agent:<id>` signature for a nonexistent grant is `BAD_SIGNATURE`, identical to a wrong key, and the grant's
+issuer is compared only after its key verified. Evidence: `test/preauth-leak.test.js` (identical result objects
+for bad/missing/partly-valid signatures against absent vs present vs frozen vs KYC-expired targets, and
+foreign/revoked/unknown grants, for every affected type; plus a regression group showing the specific errors
+are unchanged once the signature verifies).
+
+**Replay:** error codes are not hashed. `txRoot` is the hash of the submitted instructions and `stateRoot` of
+state (the rejected-code counters are not in it); a rejected instruction changes neither state nor dedup. The
+success condition of every handler is unchanged, so a block log written by the previous kernel replays to the
+same block hashes and state roots (checked by recovering a store written by the pre-fix code, which contained
+rejected probes, with the post-fix code). **Deliberate changes visible to callers:** (1) a caller with a missing or bad signature now gets the signature
+error where it used to get a state error (that is the fix); (2) a signature naming a nonexistent grant is
+`BAD_SIGNATURE`, not `UNKNOWN_GRANT`; (3) where the signer lives in state (`ESCROW_RELEASE`, `ESCROW_REFUND`,
+`CANCEL_SWEEP`, `REVOKE_GRANT`), a caller holding no valid key at all gets `MISSING_SIGNATURE`/`BAD_SIGNATURE`
+before the `UNKNOWN_*` lookup; a caller with some valid participant key still gets `UNKNOWN_*` as before;
+(4) a caller whose valid signatures are for the wrong roles gets the missing-signature error ahead of
+state-free shape errors such as `SELF_TRADE`.
+
+**Decision on the envelope checks.** `MALFORMED`, `BAD_INST_ID`, `BAD_VALIDITY`, `UNKNOWN_TYPE` and `NETWORK_HALTED`
+read only the caller's bytes, the block time or the public halt flag, so they stay before authorisation.
+`DUPLICATE_INSTRUCTION` does reveal one bit of state ("an instruction with this inst_id was accepted in the last
+180 s"); it also stays, because it is recorded only for accepted instructions, is useful only to someone who
+already holds the id (use high-entropy ids; a guessable UETR is a residual), and is what makes a retry
+exactly-once. Not widened to a larger restructure in this item.
