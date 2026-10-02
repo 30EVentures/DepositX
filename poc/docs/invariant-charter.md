@@ -222,3 +222,48 @@ The four earlier delegation mutants were re-run against the larger alphabet and 
 
 Unchanged and re-confirmed: the routine 40-action base model still reports 3,793 states / 40,680
 transitions with zero failures.
+
+### Roadmap 8: four findings from an external audit (2026-10-02)
+
+Four line-pinpointed findings were relayed from an external audit of this code; each was confirmed against
+the cited lines before it was fixed. (Two other findings from the same audit - no transport authentication
+on any HTTP route, and consensus being simulated - are known PoC limits and were out of scope.)
+
+**8.1** The pacs.002 `ACSC` text no longer says "consensus finality"; it says "ledger-accepted (simulated
+consensus)", because all four validator keys sign every block in one process and nothing can disagree.
+**8.2** `ESCROW_RELEASE` checked only the raw signature when `releaseRole` named an agent grant, so a revoked
+or expired grant could still release escrow. It now also runs the same `#chain` liveness check `#authorize`
+uses. `ESCROW_RELEASE` stays non-grantable on purpose; this adds liveness, not an envelope.
+**8.3** `CANCEL_SWEEP` and `ESCROW_REFUND` accepted any live same-issuer grant with the right type and
+counterparties. Both now require the acting grant to be the one that registered/locked the record or an
+ancestor of it, via one shared `#grantOwnsRecord` (the same ancestor walk `REVOKE_GRANT` uses, except that the
+grant itself may also act). Escrows now record the locking `grant`, omitted when the institution locked them, so
+state roots for chains that never used grants are unchanged. A record with no grant on file can be cancelled or
+refunded only by the institution's own key.
+**8.4** A `BATCH`'s outer envelope signs nothing, so a relayer could submit a subset of its legs. A leg may now
+carry a signed `batch_digest` (a hash over the exact, ordered `inst_id`s it rides with); once it does, the
+kernel refuses it standalone, as a subset, reordered, or padded with an extra leg (`BATCH_LEG_MISBOUND`).
+The digest is order-sensitive because batch order is semantically meaningful here. It is opt-in: a leg with
+no `batch_digest` behaves exactly as before, so an unbound batch is still splittable.
+
+Model-check coverage: 8.3 extends the delegation alphabet from 19 to 21 actions (g1 cancelling its own sweep
+`s9`, legit; g2, a descendant not an ancestor, cancelling it, an attack) and the S6 oracle judges every
+accepted `CANCEL_SWEEP` against the model's own record of who owns the sweep. One new planted bug (the
+ownership check skipped) is caught. Because `ESCROW_REFUND` uses the same shared helper, this exercises it
+too; there is no separate escrow action. 8.2 and 8.4 are covered by targeted tests, not the search: 8.2 turns
+on grant revocation timing against an escrow and 8.4 on signed-digest binding, neither of which the focused
+alphabet models.
+
+| Run | Actions | Depth | States | Transitions | Time | Failures |
+|---|---|---|---|---|---|---|
+| Delegation model, routine (`modelcheck.test.js`) | 21 | 9 | 1,315 | 21,189 | ~16 s | 0 |
+| Delegation model, one-off (`node src/modelcheck.js 20 delegation`) | 21 | 13 | **1,767, exhausted** | 37,107 | 27.3 s | 0 |
+| Routine base model, unchanged | 40 | 5 | 3,793 | 40,680 | ~32 s | 0 |
+| Base model, one-off (`node src/modelcheck.js 6`) | 40 | 6 | 13,685-13,687 | 151,720 | ~121 s | 0 |
+
+**A measurement correction.** The depth-6 base-model state count is *not* deterministic: three runs gave
+13,685, 13,686 and 13,687 states with identical transitions (151,720) and zero failures, and the pre-change
+commit shows the same spread, so it is not caused by this pass. The earlier-recorded 13,673 predates
+roadmap 5-7 and is not directly comparable. The likely cause is wall-clock time leaking into which
+representative of an aliased state is explored first; it was not investigated further. The routine depth-5
+figure is stable (3,793). Treat depth-6 state counts as accurate to roughly two states.

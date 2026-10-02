@@ -138,14 +138,15 @@ withMutant('payments ignore the settlement position: the payer can spend money i
 
 // ---------------------------------------------------------------------------------------------
 // Roadmap 6.3: delegation soundness (S6). Grants gate authority (P6), so unlike caller attribution
-// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (19 actions) so
-// the search can go deep: a counterexample needs mint, mint, grant, sub-grant, revoke, use.
-test('model check S6: every state reachable within 9 delegation actions keeps every grant inside its parent, honours revocation through the whole chain, and never lets an agent past its envelope without the institution', () => {
+// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (21 actions,
+// extended from 19 by roadmap 8.3's CANCEL_SWEEP-ownership actions) so the search can go deep: a
+// counterexample needs mint, mint, grant, sub-grant, revoke, use.
+test('model check S6: every state reachable within 9 delegation actions keeps every grant inside its parent, honours revocation through the whole chain, never lets an agent past its envelope without the institution, and never lets a grant cancel a sweep it did not register', () => {
   const r = modelCheck({ maxDepth: 9, maxStates: 5000, actions: DELEGATION_MODEL });
   assert.deepEqual(r.failures, []);
-  assert.equal(r.actions, 19);
-  assert.ok(r.states > 1200, `explored ${r.states} states`);
-  assert.ok(r.transitions > 17500, `explored ${r.transitions} transitions`);
+  assert.equal(r.actions, 21);
+  assert.ok(r.states > 1300, `explored ${r.states} states`);
+  assert.ok(r.transitions > 21000, `explored ${r.transitions} transitions`);
 });
 
 function withDelegationMutant(name, patch, expectKinds) {
@@ -246,4 +247,21 @@ withDelegationMutant('a batch is accepted although its legs have different effec
     events.push({ type: 'BATCH_SETTLED', legs: tx.payload.legs.length });
   };
   return () => (Ledger.prototype.tx_BATCH = orig);
+}, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);
+
+// Roadmap 8.3: an external-audit finding. CANCEL_SWEEP checked only that the acting grant was live
+// and allowed the type - never that it was the grant (or an ancestor) that registered the sweep.
+withDelegationMutant('CANCEL_SWEEP does not check the acting grant registered the sweep: any grant with CANCEL_SWEEP in its envelope can cancel any sweep', () => {
+  const orig = Ledger.prototype.tx_CANCEL_SWEEP;
+  Ledger.prototype.tx_CANCEL_SWEEP = function (tx, time, j, events) {
+    try {
+      return orig.call(this, tx, time, j, events);
+    } catch (e) {
+      if (!(e instanceof KernelError) || e.code !== 'SWEEP_WRONG_GRANT') throw e;
+      // bug: proceed exactly as if the ownership check had passed
+      j.del(this.s.sweeps, tx.payload.sweepId);
+      events.push({ type: 'SWEEP_CANCELLED', sweepId: tx.payload.sweepId });
+    }
+  };
+  return () => (Ledger.prototype.tx_CANCEL_SWEEP = orig);
 }, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);

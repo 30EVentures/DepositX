@@ -233,3 +233,93 @@ test('7.2: BATCH_MIXED_CALLERS is in the machine-readable error catalog with a r
   assert.equal(typeof s.errors.BATCH_MIXED_CALLERS.remedy, 'string');
   assert.equal(s.errors.BATCH_MIXED_CALLERS.retryable, false);
 });
+
+// ------------------------------------------------------------------ 8.3 (external audit finding)
+// Neither CANCEL_SWEEP nor ESCROW_REFUND checked that the acting grant was the one that registered/
+// locked the record - #authorize only checked the acting grant was live, allowed the type, and (if
+// set) listed the right counterparties. Any same-issuer grant with the right allow_types and
+// counterparties could cancel or refund a record belonging to a DIFFERENT grant, or one the
+// institution registered directly. Fix mirrors REVOKE_GRANT's own ancestor check.
+test('8.3: an unrelated sibling grant cannot cancel another grant\'s sweep; the registering grant can', () => {
+  const n = setup({ allowTypes: ['REGISTER_SWEEP', 'CANCEL_SWEEP', 'GRANT'] });
+  assert.ok(n.grantAgent(G({ grantId: 'other-1', allowTypes: ['REGISTER_SWEEP', 'CANCEL_SWEEP'] })).ok, 'a second, unrelated root grant on the same issuer');
+  regSweep(n, 'sweeper-1');
+  const wrong = one(n, n.agentTx('other-1', 'CANCEL_SWEEP', { sweepId: 'sw-1' }, []));
+  assert.equal(wrong.error, 'SWEEP_WRONG_GRANT');
+  assert.ok(n.ledger.s.sweeps.has('sw-1'), 'not cancelled');
+  const right = one(n, n.agentTx('sweeper-1', 'CANCEL_SWEEP', { sweepId: 'sw-1' }, []));
+  assert.ok(right.ok, right.message);
+  assert.ok(!n.ledger.s.sweeps.has('sw-1'));
+  allOk(n);
+});
+
+test('8.3: an ancestor of the registering grant can cancel its descendant\'s sweep; an unrelated sibling cannot', () => {
+  const n = setup({ allowTypes: ['REGISTER_SWEEP', 'CANCEL_SWEEP', 'GRANT'] });
+  assert.ok(n.grantAgent(G({ grantId: 'kid', parent: 'sweeper-1', allowTypes: ['REGISTER_SWEEP', 'CANCEL_SWEEP'] })).ok);
+  assert.ok(n.grantAgent(G({ grantId: 'kid-sibling', parent: 'sweeper-1', allowTypes: ['CANCEL_SWEEP'] })).ok);
+  regSweep(n, 'kid');
+  const wrong = one(n, n.agentTx('kid-sibling', 'CANCEL_SWEEP', { sweepId: 'sw-1' }, []));
+  assert.equal(wrong.error, 'SWEEP_WRONG_GRANT', 'a sibling is neither the registering grant nor its ancestor');
+  const right = one(n, n.agentTx('sweeper-1', 'CANCEL_SWEEP', { sweepId: 'sw-1' }, []));
+  assert.ok(right.ok, right.message);
+  allOk(n);
+});
+
+test('8.3: a sweep the institution registered directly cannot be cancelled by any agent grant, only by the institution', () => {
+  const n = setup();
+  assert.ok(n.registerSweep('sw-inst', 'MPL:acme', 'MPL:harbour', dollars(400_000)).ok);
+  const wrong = one(n, n.agentTx('sweeper-1', 'CANCEL_SWEEP', { sweepId: 'sw-inst' }, []));
+  assert.equal(wrong.error, 'SWEEP_WRONG_GRANT');
+  assert.ok(n.cancelSweep('sw-inst').ok, 'the institution itself is unaffected');
+  allOk(n);
+});
+
+test('8.3: an unrelated grant cannot refund another grant\'s escrow; the locking grant can, after expiry', () => {
+  const n = setup({ allowTypes: ['ESCROW_LOCK', 'ESCROW_REFUND', 'GRANT'] });
+  assert.ok(n.grantAgent(G({ grantId: 'other-1', allowTypes: ['ESCROW_LOCK', 'ESCROW_REFUND'] })).ok);
+  const lock = one(n, n.agentTx('sweeper-1', 'ESCROW_LOCK', { escrowId: 'e-1', from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString(), expiresAt: n.now() + 60, releaseRole: 'ops:MPL', eventName: null }, ['screen:MPL']));
+  assert.ok(lock.ok, lock.message);
+  assert.equal(n.ledger.s.escrows.get('e-1').grant, 'sweeper-1');
+  n.advance(120);
+  const wrong = one(n, n.agentTx('other-1', 'ESCROW_REFUND', { escrowId: 'e-1' }, []));
+  assert.equal(wrong.error, 'ESCROW_WRONG_GRANT');
+  assert.ok(n.ledger.s.escrows.has('e-1'), 'not refunded');
+  const right = one(n, n.agentTx('sweeper-1', 'ESCROW_REFUND', { escrowId: 'e-1' }, []));
+  assert.ok(right.ok, right.message);
+  assert.ok(!n.ledger.s.escrows.has('e-1'));
+  allOk(n);
+});
+
+test('8.3: an ancestor of the locking grant can refund its descendant\'s escrow; an unrelated sibling cannot', () => {
+  const n = setup({ allowTypes: ['ESCROW_LOCK', 'ESCROW_REFUND', 'GRANT'] });
+  assert.ok(n.grantAgent(G({ grantId: 'kid', parent: 'sweeper-1', allowTypes: ['ESCROW_LOCK', 'ESCROW_REFUND'] })).ok);
+  assert.ok(n.grantAgent(G({ grantId: 'kid-sibling', parent: 'sweeper-1', allowTypes: ['ESCROW_REFUND'] })).ok);
+  const lock = one(n, n.agentTx('kid', 'ESCROW_LOCK', { escrowId: 'e-2', from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString(), expiresAt: n.now() + 60, releaseRole: 'ops:MPL', eventName: null }, ['screen:MPL']));
+  assert.ok(lock.ok, lock.message);
+  n.advance(120);
+  const wrong = one(n, n.agentTx('kid-sibling', 'ESCROW_REFUND', { escrowId: 'e-2' }, []));
+  assert.equal(wrong.error, 'ESCROW_WRONG_GRANT');
+  const right = one(n, n.agentTx('sweeper-1', 'ESCROW_REFUND', { escrowId: 'e-2' }, []));
+  assert.ok(right.ok, right.message);
+  allOk(n);
+});
+
+test('8.3: an escrow the institution locked directly cannot be refunded by any agent grant, only by the institution', () => {
+  const n = setup({ allowTypes: ['ESCROW_REFUND'] });
+  const lock = n.escrowLock('MPL:acme', 'MPL:harbour', 'e-3', dollars(5), { expiresAt: n.now() + 60 });
+  assert.ok(lock.ok, lock.message);
+  assert.equal('grant' in n.ledger.s.escrows.get('e-3'), false);
+  n.advance(120);
+  const wrong = one(n, n.agentTx('sweeper-1', 'ESCROW_REFUND', { escrowId: 'e-3' }, []));
+  assert.equal(wrong.error, 'ESCROW_WRONG_GRANT');
+  assert.ok(n.escrowRefund('e-3').ok, 'the institution itself is unaffected');
+  allOk(n);
+});
+
+test('8.3: SWEEP_WRONG_GRANT and ESCROW_WRONG_GRANT are in the machine-readable error catalog with remedies', () => {
+  const s = Network.schema();
+  for (const code of ['SWEEP_WRONG_GRANT', 'ESCROW_WRONG_GRANT']) {
+    assert.equal(typeof s.errors[code].remedy, 'string', code);
+    assert.equal(s.errors[code].retryable, false, code);
+  }
+});

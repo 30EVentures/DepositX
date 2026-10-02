@@ -593,7 +593,7 @@ Scope is exactly these four; the audit's other two findings (no transport auth o
 any HTTP route; consensus is simulated, not real) are known, already-disclosed PoC
 limits and explicitly out of scope for this pass.
 
-### [ ] 8.1 Misleading "consensus finality" wording in the ISO 20022 output
+### [x] 8.1 Misleading "consensus finality" wording in the ISO 20022 output
 
 **Finding.** `iso20022.js`'s pacs.002 ACSC status prints "consensus finality" in
 `AddtlInf`, but this PoC's consensus is simulated in one process (`network.js`
@@ -606,14 +606,14 @@ consensus)" - that still says the block is final on this ledger without implying
 real multi-party consensus.
 
 **Acceptance criteria**
-- [ ] The ACSC `AddtlInf` string no longer contains the phrase "consensus
+- [x] The ACSC `AddtlInf` string no longer contains the phrase "consensus
       finality" unqualified; it says plainly that consensus is simulated.
-- [ ] `test/iso20022.test.js` gains an assertion on the exact wording so this
+- [x] `test/iso20022.test.js` gains an assertion on the exact wording so this
       cannot silently regress.
-- [ ] No behavioural change: `TxSts` values, RJCT path and every other field
+- [x] No behavioural change: `TxSts` values, RJCT path and every other field
       are untouched.
 
-### [ ] 8.2 ESCROW_RELEASE does not check a grant-held release role is still live
+### [x] 8.2 ESCROW_RELEASE does not check a grant-held release role is still live
 
 **Finding.** `tx_ESCROW_RELEASE` authorises via `this.#sig(tx, rec.releaseRole)`
 only. When `releaseRole` is `agent:<gid>` (set at lock time), `#pubFor` returns
@@ -632,19 +632,19 @@ succeeds, also call the existing `#chain(gid, time)` (the same liveness check
 window check is added here; that is correctly out of scope for release.
 
 **Acceptance criteria**
-- [ ] An escrow locked with `releaseRole: agent:<gid>` can be released normally
+- [x] An escrow locked with `releaseRole: agent:<gid>` can be released normally
       while the grant is live (existing behaviour unchanged).
-- [ ] Once that grant is revoked, the same release attempt fails `GRANT_REVOKED`
+- [x] Once that grant is revoked, the same release attempt fails `GRANT_REVOKED`
       and moves no money (the funds stay locked, available to refund after
       expiry by the institution).
-- [ ] Same for an expired grant: `GRANT_EXPIRED`.
-- [ ] A `releaseRole` naming the institution's own `ops:<issuer>` key (the
+- [x] Same for an expired grant: `GRANT_EXPIRED`.
+- [x] A `releaseRole` naming the institution's own `ops:<issuer>` key (the
       default, no grant involved) is completely unaffected.
-- [ ] `npm test` stays green; new tests in `test/escrow.test.js` or
+- [x] `npm test` stays green; new tests in `test/escrow.test.js` or
       `test/delegation-gaps.test.js` (whichever existing file fits the pattern
       better once read).
 
-### [ ] 8.3 CANCEL_SWEEP and ESCROW_REFUND don't check the acting grant is the one that created the record
+### [x] 8.3 CANCEL_SWEEP and ESCROW_REFUND don't check the acting grant is the one that created the record
 
 **Finding.** Neither handler checks that the grant cancelling a sweep or
 refunding an escrow is the grant that registered/locked it. `#authorize` only
@@ -665,27 +665,27 @@ institution registered/locked it directly) can only be cancelled/refunded by
 the institution's own `ops:` signature, never by any agent grant.
 
 **Acceptance criteria**
-- [ ] `tx_ESCROW_LOCK` records `grant: <gid>` on the escrow when an agent
+- [x] `tx_ESCROW_LOCK` records `grant: <gid>` on the escrow when an agent
       locked it (omitted when the institution locked it directly, so existing
       state roots for chains that never used grants are unchanged).
-- [ ] The same grant that registered a sweep can cancel it; an ancestor of that
+- [x] The same grant that registered a sweep can cancel it; an ancestor of that
       grant can cancel it; a sibling or unrelated grant (even same issuer, same
       allow_types, matching counterparties) cannot - rejected `SWEEP_WRONG_GRANT`.
-- [ ] Same three cases for `ESCROW_REFUND` against the locking grant - rejected
+- [x] Same three cases for `ESCROW_REFUND` against the locking grant - rejected
       `ESCROW_WRONG_GRANT`.
-- [ ] A sweep/escrow the institution created directly cannot be cancelled/
+- [x] A sweep/escrow the institution created directly cannot be cancelled/
       refunded by any agent grant, even one that would otherwise qualify under
       `#authorize`'s own checks.
-- [ ] An institution's own `ops:` signature can still cancel/refund anything of
+- [x] An institution's own `ops:` signature can still cancel/refund anything of
       its own issuer, exactly as before, grant or no grant.
-- [ ] `schema()`'s error catalog gains `SWEEP_WRONG_GRANT` and
+- [x] `schema()`'s error catalog gains `SWEEP_WRONG_GRANT` and
       `ESCROW_WRONG_GRANT` with remedies.
-- [ ] `npm test` stays green; new tests in `test/delegation-gaps.test.js`
+- [x] `npm test` stays green; new tests in `test/delegation-gaps.test.js`
       (same file as roadmap 7.1's sweep-grant tests).
-- [ ] Model checker: one new planted-bug mutation (skip this check) caught by a
+- [x] Model checker: one new planted-bug mutation (skip this check) caught by a
       new or extended delegation action, following 6.3/7.1's own pattern.
 
-### [ ] 8.4 A batch's "all or nothing" intent is not cryptographically bound
+### [x] 8.4 A batch's "all or nothing" intent is not cryptographically bound
 
 **Finding.** `tx_BATCH`'s outer envelope is unsigned (`network.js`'s `batch()`
 calls `this.tx('BATCH', { legs: legTxs }, [])` - empty roles); each leg is a
@@ -706,32 +706,32 @@ exactly as before (opt-in protection, zero migration, matching every other
 addition to the envelope so far).
 
 **Acceptance criteria**
-- [ ] `batch_digest` is part of the signed digest (`messageOf`/`tx()`), like
+- [x] `batch_digest` is part of the signed digest (`messageOf`/`tx()`), like
       `caller` before it - defaults to `null`, every existing test and stored
       block unaffected.
-- [ ] Two legs signed together with a matching `batch_digest`, submitted as the
+- [x] Two legs signed together with a matching `batch_digest`, submitted as the
       complete, correctly-ordered batch, settle exactly as an unbound batch
       would.
-- [ ] Either leg submitted standalone (not inside any batch) is rejected
+- [x] Either leg submitted standalone (not inside any batch) is rejected
       `BATCH_LEG_MISBOUND`, and moves nothing.
-- [ ] Submitting only one of the two legs as a new, smaller "batch" is rejected
+- [x] Submitting only one of the two legs as a new, smaller "batch" is rejected
       the same way - the recomputed digest over that subset does not match what
       was signed.
-- [ ] Reordering the same two legs into a new batch is also rejected - digest
+- [x] Reordering the same two legs into a new batch is also rejected - digest
       is order-sensitive, since batch execution order is semantically
       meaningful here.
-- [ ] Adding a third, unrelated leg alongside the original two also breaks the
+- [x] Adding a third, unrelated leg alongside the original two also breaks the
       match for the original two (the signer's exact set is enforced, not just
       a subset relationship).
-- [ ] A leg with no `batch_digest` is completely unaffected or protected -
+- [x] A leg with no `batch_digest` is completely unaffected or protected -
       documented as opt-in, not a silent behaviour change for existing demo
       buttons/tests that don't use it.
-- [ ] `Network` gains a convenience builder (mirroring `agentTx`/`grantTx`'s
+- [x] `Network` gains a convenience builder (mirroring `agentTx`/`grantTx`'s
       style) so a real caller can actually produce a bound batch without
       hand-computing the digest themselves.
-- [ ] `schema()`'s `signed_digest` description and error catalog
+- [x] `schema()`'s `signed_digest` description and error catalog
       (`BATCH_LEG_MISBOUND`) are updated to match.
-- [ ] `npm test` stays green; new tests in `test/batch.test.js`.
+- [x] `npm test` stays green; new tests in `test/batch.test.js`.
 
 ## Blocked / needs input
 
@@ -752,6 +752,7 @@ make, or is a business/regulatory action rather than code. Nothing here yet.)*
 
 ## Session log
 
+- 2026-10-02 — Priority 8: four findings from an external audit, relayed by Caleb with line numbers. Each was confirmed against the cited code before anything was fixed (all four were real); spec written into this file unchecked and committed first, then tests before fixes. **8.1** the pacs.002 `ACSC` text said "consensus finality" although all four validator keys sign every block in one process; now "ledger-accepted (simulated consensus)", with a test pinning the wording (red first). **8.2** `ESCROW_RELEASE` verified only the raw signature when `releaseRole` named an agent grant, so revoking or expiring the grant did not stop it releasing escrow; now it also runs `#chain`. 2 of the 3 new tests were red first (revoked, expired); the third pins that an `ops:` release role is untouched. `ESCROW_RELEASE` was left non-grantable on purpose - this adds liveness, not an envelope. **8.3** `CANCEL_SWEEP`/`ESCROW_REFUND` accepted any live same-issuer grant with the right type; both now require the acting grant to be the registering/locking grant or its ancestor (one shared `#grantOwnsRecord`); escrows now record the locking `grant` (omitted for institution locks, so state roots are unchanged). 7 new tests, all red first, and the dependency was a real find: escrows did not record which grant locked them at all, so the fix needed new state, not just a check. Model checker: delegation alphabet 19 -> 21 actions, S6 oracle extended to judge every accepted `CANCEL_SWEEP` against the model's own record of the sweep's owner, one new planted bug caught (skip the ownership check). **8.4** a bound batch: a leg may sign a `batch_digest` over the exact ordered `inst_id`s it rides with; the kernel refuses it standalone, as a subset, reordered, or padded (`BATCH_LEG_MISBOUND`); `Network.buildBoundBatch` builds one. Opt-in - an unbound leg can still be relayed alone, as before, and I said so in the docs rather than leave it implied. **Two things of my own caught by running:** (1) in the 8.3 tests I first used the default test grant for an escrow-refund case, which lacks `ESCROW_REFUND`, so it would have been rejected `ENVELOPE_DENIED` for the wrong reason and still looked like a pass on a loose assertion - fixed by giving it the type so the new check is what rejects it; (2) my first 8.4 tamper test relabelled `batch_digest` to a different value, which is caught by the standalone-mismatch check *before* signatures are ever verified, so it was not testing the signature at all - rewritten to strip the binding to null (which passes the standalone check and must fail on signature), the attack that actually matters. **A measurement correction:** `node src/modelcheck.js 6` reported 13,687 states against the 13,673 recorded at 4.3. I measured the pre-change commit in a throwaway worktree (13,685), then reran both trees (13,686 each): the depth-6 count is nondeterministic by about two states, transitions constant at 151,720, zero failures either way - not caused by this pass; likely cause (wall clock leaking into which aliased state is explored first) was not investigated. Delegation model re-measured and exhausted at depth 13: 1,767 states, 37,107 transitions, 27.3 s (the six-bug and README figures that said 33,573 and six bugs were corrected). Also deleted a leftover `poc/demo-data/` from the earlier grant demo before committing (it held a dev keystore). Out of scope by instruction and still open: no transport authentication on any HTTP route; consensus is simulated. Full suite: 161/161 (was 140), ~70 s.
 - 2026-09-29 — Priority 7: closed both Priority 6 gaps. Spec written into this file unchecked and committed first; 19 tests in `test/delegation-gaps.test.js` written first, 13 red (the other 6 pin behaviour that must not change), then implemented. **7.1** a sweep registered under a grant stores `grant` (omitted for institution sweeps, so no state root moved); `#runSweeps` now chains, takes the headroom (per-instruction max and every ancestor's remaining window), moves `min(excess, headroom)`, and charges through `#charge` - the same helper `#authorize` now uses, extracted rather than copied. A dead chain suspends the sweep (reported in `sweepFires` as `suspended` with the reason; still registered; institution can cancel). **7.2** `tx_BATCH` collects each leg's effective caller (derived from its grant if agent-authorised, else declared, else `unspecified`), rejects `BATCH_MIXED_CALLERS` unless identical, and sets the outer result's caller from them; the outer batch's own declared caller is ignored because nothing signs it. Model checker: 3 new delegation actions (agent-registered sweep `s9`, an agent batch, a mixed-caller batch attack), the S6 oracle rewritten to walk blocks in order carrying what the action has already charged to each window, so batch legs and sweep firings are judged against what earlier ones left; two new planted bugs, plus the four earlier ones re-run against the bigger alphabet, all caught. Delegation model exhausted at depth 13: 1,767 states, 33,573 transitions, 25.1 s, zero failures; routine 40-action base run unchanged at 3,793 / 40,680. **One test expectation of my own was wrong, caught by running:** I asserted a child sweep would fire only on the *next* heartbeat after a parent transfer used up part of the shared cap, but sweeps also fire at the end of the transfer's own block, so the $500 moved in the same block; the kernel was right, the test was corrected. Full suite: 140/140 (was 119), ~67 s. Still open: demo agent keys are not persisted across restarts; nothing attests that an agent-key holder is software.
 
 

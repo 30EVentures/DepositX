@@ -92,11 +92,16 @@ const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
   if (!m) {
-    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' } });
+    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' }, batch_digest: tx.batch_digest || null });
     msgCache.set(tx, m);
   }
   return m;
 }
+
+// Roadmap 8.4: a hash over the exact, ordered inst_ids a leg was signed to ride with. Order-
+// sensitive, since batch execution order is semantically meaningful here (an earlier leg's
+// settlement-position effect can gate a later leg) - reordering the same legs must not match.
+export const batchDigestOf = (instIds) => sha256(canon(instIds));
 
 // Par legs must conserve: tokens burned at the payer issuer == tokens minted at the payee issuer,
 // and each issuer's settlement-position move equals its token move. (Invariant P3.)
@@ -268,6 +273,17 @@ export class Ledger {
       if (left < room) room = left;
     }
     return room < 0n ? 0n : room;
+  }
+  // Shared by CANCEL_SWEEP and ESCROW_REFUND (roadmap 8.3): the acting grant must be the grant
+  // that registered/locked the record, or a strict ancestor of it - not merely any live grant with
+  // the right type and counterparties, which is all #authorize alone checks. Mirrors
+  // tx_REVOKE_GRANT's own ancestor walk. A record with no grant on file (the institution acted
+  // directly) matches no agent grant at all, by construction (the loop never starts).
+  #grantOwnsRecord(actingGid, recordedGid) {
+    for (let cur = recordedGid && this.s.grants.get(recordedGid); cur; cur = cur.parent && this.s.grants.get(cur.parent)) {
+      if (cur.id === actingGid) return true;
+    }
+    return false;
   }
 
   // The caller worth recording on a stored copy of `tx`: derived from a grant, else self-attested,
@@ -608,7 +624,10 @@ export class Ledger {
     }
     const escrowAcct = this.s.accounts.get(escrowAcctId);
     this.#moveCash(j, from, escrowAcct, x, { instId: tx.inst_id, time, events });
-    j.set(this.s.escrows, p.escrowId, { from: from.id, to: to.id, amount: x, expiresAt: p.expiresAt, releaseRole, eventName, escrowAccountId: escrowAcctId });
+    // Locked under a grant: recorded so ESCROW_REFUND can later require the refunding grant to be
+    // this one or an ancestor of it (roadmap 8.3). Omitted otherwise, matching sweeps' own pattern
+    // (roadmap 7.1), so existing state roots for chains that never used grants are unchanged.
+    j.set(this.s.escrows, p.escrowId, { from: from.id, to: to.id, amount: x, expiresAt: p.expiresAt, releaseRole, eventName, escrowAccountId: escrowAcctId, ...(this.#derived ? { grant: this.#derived.grant_id } : {}) });
     events.push({ type: 'ESCROW_LOCKED', escrowId: p.escrowId, from: from.id, to: to.id, amount: x.toString(), eventGated: eventName !== null });
   }
 
@@ -631,6 +650,11 @@ export class Ledger {
     // defeating the point of gating it on an event in the first place.
     need(rec.eventName === null, 'USE_EVENT_RELEASE', 'this escrow is event-gated: use EVENT_RELEASE');
     this.#sig(tx, rec.releaseRole);
+    // Roadmap 8.2: ESCROW_RELEASE is deliberately not grantable (release of already-locked funds
+    // never goes through the envelope/window machinery), but a releaseRole naming an agent grant
+    // must still stop working the moment that grant is revoked or expired - #sig alone only checks
+    // the raw signature, never liveness. Reuse the same chain check #authorize already applies.
+    if (rec.releaseRole.startsWith('agent:')) this.#chain(rec.releaseRole.slice('agent:'.length), time);
     this.#releaseEscrow(rec, p.escrowId, time, j, events, 'ESCROW_RELEASED');
   }
 
@@ -657,6 +681,9 @@ export class Ledger {
     need(time >= rec.expiresAt, 'ESCROW_NOT_EXPIRED');
     const from = this.#live(rec.from, time);
     this.#authorize(tx, from.issuer, { accounts: [rec.from, rec.to], time, j });
+    // Roadmap 8.3: #authorize alone only checks the acting grant is live, allows ESCROW_REFUND, and
+    // (if set) lists the right counterparties - not that it is the grant that locked THIS escrow.
+    if (this.#derived) need(this.#grantOwnsRecord(this.#derived.grant_id, rec.grant), 'ESCROW_WRONG_GRANT', 'only the grant that locked this escrow, or one of its ancestors, may refund it');
     const escrowAcct = this.#account(rec.escrowAccountId);
     j.del(this.s.escrows, p.escrowId);
     if (from.issuer === escrowAcct.issuer) {
@@ -677,9 +704,13 @@ export class Ledger {
   tx_BATCH(tx, time, j, events) {
     const p = tx.payload;
     need(Array.isArray(p.legs) && p.legs.length > 0, 'BATCH_EMPTY');
+    // Roadmap 8.4: recomputed over exactly the legs actually present, in order. A leg signed with a
+    // batch_digest only matches this if it is riding with precisely the set and order it was signed
+    // for - #checkEnvelope rejects any mismatch, including a standalone or reordered/subset relay.
+    const digest = batchDigestOf(p.legs.map((l) => l && l.inst_id));
     const callers = [];
     for (const leg of p.legs) {
-      const h = this.#checkEnvelope(leg, time);
+      const h = this.#checkEnvelope(leg, time, digest);
       need(leg.type !== 'BATCH', 'BATCH_NO_NESTING');
       h.call(this, leg, time, j, events);
       j.set(this.s.dedup, leg.inst_id, time);
@@ -719,6 +750,9 @@ export class Ledger {
     need(rec, 'UNKNOWN_SWEEP');
     const from = this.#account(rec.from);
     this.#authorize(tx, from.issuer, { accounts: [rec.from, rec.to], time, j });
+    // Roadmap 8.3: #authorize alone only checks the acting grant is live, allows CANCEL_SWEEP, and
+    // (if set) lists the right counterparties - not that it is the grant that registered THIS sweep.
+    if (this.#derived) need(this.#grantOwnsRecord(this.#derived.grant_id, rec.grant), 'SWEEP_WRONG_GRANT', 'only the grant that registered this sweep, or one of its ancestors, may cancel it');
     j.del(this.s.sweeps, p.sweepId);
     events.push({ type: 'SWEEP_CANCELLED', sweepId: p.sweepId });
   }
@@ -884,11 +918,15 @@ export class Ledger {
   // The generic checks every instruction gets, whether submitted at the top level or as one
   // leg of a BATCH (T7): well-formed envelope, fresh inst_id (dedup), a real handler, and the
   // halt gate. Returns the handler so the caller executes it against its own journal/events.
-  #checkEnvelope(tx, time) {
+  // `batchDigest` (roadmap 8.4) is the digest of whichever batch is CURRENTLY executing this tx -
+  // null at the top level. A leg whose own signed `batch_digest` does not match (including a leg
+  // with none, running inside a batch that itself has no matching claim) is refused outright.
+  #checkEnvelope(tx, time, batchDigest = null) {
     need(tx && typeof tx === 'object' && typeof tx.type === 'string', 'MALFORMED');
     need(typeof tx.inst_id === 'string' && tx.inst_id.length >= 8 && tx.inst_id.length <= 64, 'BAD_INST_ID');
     need(Number.isInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
     need(!this.s.dedup.has(tx.inst_id), 'DUPLICATE_INSTRUCTION');
+    need(!tx.batch_digest || tx.batch_digest === batchDigest, 'BATCH_LEG_MISBOUND', 'this instruction was signed to ride only inside a specific batch, and this is not it');
     const h = this['tx_' + tx.type];
     need(typeof h === 'function' && !tx.type.startsWith('_'), 'UNKNOWN_TYPE');
     if (this.s.halt) need(['RESUME', 'ATTEST', 'REPORT_PAR_BREAK'].includes(tx.type), 'NETWORK_HALTED', `network halted: ${this.s.halt.reason}`);

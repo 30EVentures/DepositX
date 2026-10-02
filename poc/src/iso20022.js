@@ -107,7 +107,7 @@ export function buildPacs002({ msgId, endToEndId, uetr, settled, error, message,
       <OrgnlUETR>${esc(uetr || '')}</OrgnlUETR>
       <TxSts>${settled ? 'ACSC' : 'RJCT'}</TxSts>${
         settled
-          ? `\n      <ClrSysRef>${esc(hash.slice(0, 35))}</ClrSysRef>\n      <AddtlInf>Final in block ${height}; consensus finality</AddtlInf>`
+          ? `\n      <ClrSysRef>${esc(hash.slice(0, 35))}</ClrSysRef>\n      <AddtlInf>Final in block ${height}; ledger-accepted (simulated consensus)</AddtlInf>`
           : `\n      <StsRsnInf><Rsn><Cd>${code}</Cd></Rsn><AddtlInf>${esc(message || reason)}</AddtlInf></StsRsnInf>`
       }
     </TxInfAndSts>
