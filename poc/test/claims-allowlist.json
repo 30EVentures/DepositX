@@ -42,6 +42,12 @@
       "term": "live",
       "string": "8.3 `CANCEL_SWEEP` and `ESCROW_REFUND` accepted any live same-issuer grant with the right type and counterparties.",
       "reason": "Technical term, not a claim: \"live grant\" means not revoked and not expired (Ledger.grantStatus), describing the bug that roadmap 8.3 fixed."
+    },
+    {
+      "file": "poc/docs/invariant-charter.md",
+      "term": "live",
+      "string": "Before a firing, `#sweepBlockedBy` checks, in `#live`'s own order: network halted (`NETWORK_HALTED`), the issuer not ACTIVE (`ISSUER_QUARANTINED`), then each of the two accounts for frozen (`ACCOUNT_FROZEN`) and expired KYC (`KYC_EXPIRED`).",
+      "reason": "Technical term, not a claim: `#live` is the kernel's private helper that checks an account is active and its KYC unexpired; it says nothing about the network being live."
     }
   ]
 }
