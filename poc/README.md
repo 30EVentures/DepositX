@@ -19,7 +19,7 @@ self-attested by the key holder, not independently verified.
 
 ```
 cd ~/DepositX/poc
-npm test                                  # 270 tests (~2 min)
+npm test                                  # 283 tests (~2 min)
 npm start                                 # dashboard at http://127.0.0.1:8787 (in memory)
 DEPOSITX_DATA=./data npm start             # same, durable: survives restarts, tamper-evident
 npm run bench                             # kernel throughput

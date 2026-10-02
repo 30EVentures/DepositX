@@ -48,6 +48,54 @@
       "term": "live",
       "string": "Before a firing, `#sweepBlockedBy` checks, in `#live`'s own order: network halted (`NETWORK_HALTED`), the issuer not ACTIVE (`ISSUER_QUARANTINED`), then each of the two accounts for frozen (`ACCOUNT_FROZEN`) and expired KYC (`KYC_EXPIRED`).",
       "reason": "Technical term, not a claim: `#live` is the kernel's private helper that checks an account is active and its KYC unexpired; it says nothing about the network being live."
+    },
+    {
+      "file": "poc/docs/agent-native-access-proposal.md",
+      "term": "live",
+      "string": "The institution's total agent-authorised outflow is therefore bounded by (number of live root grants) x (cap), and nothing in the kernel states or enforces a single number for it.",
+      "reason": "Technical term, not a claim: a \"live\" grant is one that is not revoked and not expired (Ledger.grantStatus); the sentence is about grants, not about the network being live."
+    },
+    {
+      "file": "poc/docs/agent-native-access-proposal.md",
+      "term": "live",
+      "string": "Reject a new root grant if the sum of live roots' caps would exceed the budget.",
+      "reason": "Technical term, not a claim: a \"live\" grant is one that is not revoked and not expired (Ledger.grantStatus); the sentence is about grants, not about the network being live."
+    },
+    {
+      "file": "poc/docs/agent-native-access-proposal.md",
+      "term": "final",
+      "string": "Store the budget as a grant-shaped record (`{window, win, per_instruction_max: none}`) that `#chain()` appends as the final element of every grant chain *for that issuer*, when one is set.",
+      "reason": "Technical term, not a claim: \"final element\" is the last item of an array in a proposed data structure; it says nothing about settlement finality."
+    },
+    {
+      "file": "poc/docs/persistent-idempotency-proposal.md",
+      "term": "production",
+      "string": "It answers the line in `invariant-charter.md` (Idempotency row, ~L38) that \"a production gateway needs its own persistent UETR table\".",
+      "reason": "Forward-looking requirement of a future gateway quoted from the charter; claims nothing about this proof of concept."
+    },
+    {
+      "file": "poc/docs/persistent-idempotency-proposal.md",
+      "term": "live",
+      "string": "on a repeat with a different digest under a live key, refuses it as `IDEMPOTENCY_CONFLICT` (retry with the same bytes, or use a new id) rather than flashy-ledger's silent \"already done\".",
+      "reason": "Technical term, not a claim: a \"live\" idempotency key is one still inside its retention window."
+    },
+    {
+      "file": "poc/docs/persistent-idempotency-proposal.md",
+      "term": "guaranteed",
+      "string": "`POST /api/submit` is the agent path and bypasses the gateway entirely, so under C the agents, the very callers most likely to retry, keep only the 180 s guarantee.",
+      "reason": "Technical term about the kernel's 180-second duplicate-detection window in a proposal; no guarantee about settlement or safety is claimed."
+    },
+    {
+      "file": "poc/docs/persistent-idempotency-proposal.md",
+      "term": "live",
+      "string": "Conflict behaviour: reject a different payload under a live id (recommended, deliberately unlike flashy-ledger), or return the original.",
+      "reason": "Technical term, not a claim: a \"live\" id is one still inside its retention window."
+    },
+    {
+      "file": "poc/docs/persistent-idempotency-proposal.md",
+      "term": "production",
+      "string": "X4.4 Docs: README row and limits, charter entry, update the Idempotency row's \"(production gateway needs a persistent UETR table)\" note.",
+      "reason": "Forward-looking requirement of a future gateway quoted from the charter; claims nothing about this proof of concept."
     }
   ]
 }
