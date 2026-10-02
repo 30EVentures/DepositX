@@ -300,3 +300,60 @@ read only the caller's bytes, the block time or the public halt flag, so they st
 180 s"); it also stays, because it is recorded only for accepted instructions, is useful only to someone who
 already holds the id (use high-entropy ids; a guessable UETR is a residual), and is what makes a retry
 exactly-once. Not widened to a larger restructure in this item.
+
+### Hardening X2: sweeps are held to the liveness TRANSFER enforces (2026-10-02)
+
+`#runSweeps` (run from `#endOfBlock`) used to check only that both accounts exist and the source is over `keep`.
+It therefore kept moving money during a network halt, while the issuer was quarantined, and from or to a frozen
+or KYC-expired account - all cases where the same movement submitted as a TRANSFER is refused. A sweep is a
+standing instruction that fires without anyone submitting anything, so it must not be the one path that ignores
+those gates.
+
+**The rule.** Before a firing, `#sweepBlockedBy` checks, in `#live`'s own order: network halted
+(`NETWORK_HALTED`), the issuer not ACTIVE (`ISSUER_QUARANTINED`), then each of the two accounts for frozen
+(`ACCOUNT_FROZEN`) and expired KYC (`KYC_EXPIRED`). A blocked sweep is **suspended, not deleted**: it stays
+registered and visible, moves nothing, is reported in `sweepFires` as `{suspended: true, reason}`, can still be
+cancelled by the institution, and fires again by itself in the block that clears the condition (the RESUME or
+UNFREEZE block's own end-of-block hook runs the sweeps). The check runs before the grant logic, so a suspended
+firing is never charged to a grant window. The suspension is reported only when excess exists, matching the
+existing dead-grant suspension.
+
+**Two honest limits, both recorded in the code.**
+1. *The block that detects a break has already run its sweeps.* Sweeps run before the invariant check (so a
+   sweep that clears an account back under `keep` is reflected in the same snapshot), and a same-issuer move is
+   conservation-neutral, so this cannot create a violation; suspension begins with the next block.
+2. *Suspending under quarantine is stricter than TRANSFER, not equal to it.* `#moveCash` checks quarantine only
+   on its cross-issuer branch, so a same-issuer TRANSFER is still accepted while its issuer is quarantined
+   (`sweep-liveness.test.js` pins this). Suspending sweeps there is a policy choice, made because a standing
+   automated rule should not keep moving value in an issuer the graded halt has flagged; it is not "the same
+   check as TRANSFER". Whether TRANSFER itself should refuse under quarantine is a separate question, not
+   changed here.
+
+**Evidence.** 13 tests in `test/sweep-liveness.test.js`, written first; 8 were red against the unmodified kernel
+(each failing on "money moved", not on a harness error); the other five (the control, the pin, the issuer-scope
+guard, the replay test and the cancel test) were green throughout. The harness uses a grant-registered sweep with a short window, which leaves excess
+*pending* when the condition hits (an institution sweep fires immediately, leaving nothing to observe), plus a
+control with no condition applied, so the "nothing moved" assertions are not vacuous. Institution-registered
+sweeps are covered separately for quarantine and a frozen destination. Full suite 209/209 (was 196).
+
+**What the model checker does and does not say about this - read before relying on its numbers.**
+
+| Run (clock frozen, `Date.now` pinned) | Before X2 | After X2 |
+|---|---|---|
+| Base model, depth 5 | 3,793 states / 40,680 transitions, 0 failures | identical |
+| Base model, depth 6 | 13,442 / 151,720, 0 failures | identical |
+| Delegation model, exhausted (depth 13) | 1,767 / 37,107, 0 failures | identical |
+
+The numbers are unchanged and S1-S6 hold, so X2 caused no regression in the space the checker covers. But the
+checker **provides no coverage of X2 itself**. Counting suspended firings during both searches found none from
+halt, quarantine, freeze or KYC (the delegation model only ever hits `GRANT_REVOKED`, 6,772 times). The reason
+is structural, not a missing action: `modelCheck` fails **S1** whenever an action leaves a violation or a halt,
+and its quiescence check (L1) requires no violations and no halt, so halted and quarantined states are, by
+design, unreachable under legitimate actions. Frozen accounts are reachable in principle but no freeze action is
+in the alphabet, and KYC expiry needs a clock advance the model does not take. X2's correctness therefore rests
+on the targeted tests above, not on the search. Closing the gap needs a decision, not just more actions: a
+"fault" action class exempt from S1/L1 for the state it deliberately produces, a property S7 (a sweep moves
+nothing while the network is halted or its issuer quarantined, judged from the model's own tracking of which
+conditions hold, not read from the kernel), freeze/unfreeze actions for the frozen case, and a patchable
+predicate so a mutation test can plant "sweep ignores the gate". That changes what the safety properties assert,
+so it is proposed here and left for sign-off.
