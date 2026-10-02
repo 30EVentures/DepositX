@@ -1083,12 +1083,37 @@ export class Ledger {
   // same shape #moveCash's same-issuer branch already produces), so it cannot itself create a
   // violation, and running it first means a sweep that clears an account back under its keep
   // is reflected in the same snapshot the invariant check and the dashboard both see.
+  //
+  // X2: a firing is a settlement-path move, so it is held to the liveness TRANSFER enforces (halt gate in
+  // #checkEnvelope, then #live on both accounts) plus issuer quarantine. A sweep that cannot fire is
+  // SUSPENDED, not deleted: it stays registered and visible, moves nothing, is reported in `sweepFires`
+  // with the reason, charges no grant window, and fires again by itself once the condition clears. The
+  // checks run before the grant logic, so a halted network never consumes a grant's window.
+  // Two honest limits: (1) a block that DETECTS a break has already run its sweeps (they run before the
+  // invariant check, and a same-issuer move is conservation-neutral), so suspension starts the next block;
+  // (2) a same-issuer TRANSFER is still accepted under quarantine (#moveCash checks quarantine only on its
+  // cross-issuer branch), so suspending sweeps there is deliberately STRICTER than TRANSFER.
+  #sweepBlockedBy(from, to, time) {
+    if (this.s.halt) return 'NETWORK_HALTED';
+    const iss = this.s.issuers.get(from.issuer);
+    if (iss && iss.status !== 'ACTIVE') return 'ISSUER_QUARANTINED'; // sweeps are same-issuer only, so from's issuer is to's
+    for (const a of [from, to]) {
+      if (a.status !== 'active') return 'ACCOUNT_FROZEN';
+      if (!(a.kycExpires > time)) return 'KYC_EXPIRED';
+    }
+    return null;
+  }
   #runSweeps(time) {
     this.lastSweepFires = [];
     for (const [sweepId, sw] of this.s.sweeps) {
       const from = this.s.accounts.get(sw.from);
       const to = this.s.accounts.get(sw.to);
       if (!from || !to || from.balance <= sw.keep) continue;
+      const blocked = this.#sweepBlockedBy(from, to, time);
+      if (blocked) {
+        this.lastSweepFires.push({ sweepId, from: from.id, to: to.id, amount: '0', ...(sw.grant ? { grant: sw.grant } : {}), suspended: true, reason: blocked });
+        continue;
+      }
       let excess = from.balance - sw.keep;
       if (sw.grant) {
         let chain;

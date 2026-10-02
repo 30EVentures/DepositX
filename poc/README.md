@@ -19,7 +19,7 @@ self-attested by the key holder, not independently verified.
 
 ```
 cd ~/DepositX/poc
-npm test                                  # 173 tests (~65 s)
+npm test                                  # 209 tests (~75 s)
 npm start                                 # dashboard at http://127.0.0.1:8787 (in memory)
 DEPOSITX_DATA=./data npm start             # same, durable: survives restarts, tamper-evident
 npm run bench                             # kernel throughput
@@ -50,7 +50,7 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 | PayOnEvent (T5) | `tx_EVENT_RELEASE`: release gated on a named oracle signature registered in genesis, checked against the escrow's *own* stored event name, not the caller's claim (`escrow.test.js`) |
 | External-CSD DvP (section 2.4's own named scenario) | `Network.externalCsdDvp`/`csdConfirm`: the spec's own conditional (not atomic) bond settlement — the security lives at an outside depository, so only the cash leg is on DepositX, released by a signed `csd-confirmation` oracle with a deadline and refund path. **Residual risk window, stated plainly:** from lock to confirmation-or-deadline, exactly `[now, now + deadlineSeconds]` — cash cannot be refunded early, and cannot be stranded past the deadline. A confirmation that arrives after the deadline still succeeds if nobody has refunded first; this is a documented real risk of the design, not a silently-assumed one (`external-csd-dvp.test.js`) |
 | Batch, several legs atomic (T7) | `tx_BATCH` dispatches each leg to its own existing handler against the same journal `#execTx` already rolls back on any error — no separate rollback logic; nesting is rejected explicitly (`batch.test.js`) |
-| Standing/Sweep, same-issuer (T6) | `tx_REGISTER_SWEEP` + `#runSweeps`, fired deterministically at `#endOfBlock` — the same hook the graded halt already runs from, so no separate instruction is needed for it to take effect (`sweep.test.js`) |
+| Standing/Sweep, same-issuer (T6) | `tx_REGISTER_SWEEP` + `#runSweeps`, fired deterministically at `#endOfBlock` — the same hook the graded halt already runs from, so no separate instruction is needed for it to take effect (`sweep.test.js`). A sweep is held to the liveness TRANSFER enforces: it is *suspended* (registered, visible, moving nothing, reported with a reason) during a network halt, while its issuer is quarantined, and from or to a frozen or KYC-expired account, and fires again by itself when the condition clears (hardening X2, `sweep-liveness.test.js`). Suspending under quarantine is stricter than TRANSFER, which still accepts same-issuer moves there; the model checker does not exercise any of these conditions (see `docs/invariant-charter.md`) |
 | Deterministic, replayable | `verifyReplay()` rebuilds every block hash and state root from genesis, including Escrow/Sweep/Batch state; also detects out-of-band corruption |
 | Offline-verifiable finality receipt | `Network.verifyReceipt`: header hash + ≥3 of 4 validator signatures |
 | Crash recovery, tamper evidence | `store.js`: fsync'd hash-chained block log; recovery replays every block and requires the same hash; a torn tail is dropped; an edited, dropped or reordered block is refused (`store.test.js`) |
