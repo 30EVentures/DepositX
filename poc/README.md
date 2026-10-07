@@ -19,10 +19,11 @@ self-attested by the key holder, not independently verified.
 
 ```
 cd ~/DepositX/poc
-npm test                                  # 161 tests (~70 s)
+npm test                                  # 173 tests (~70 s)
 npm start                                 # dashboard at http://127.0.0.1:8787 (in memory)
 DEPOSITX_DATA=./data npm start             # same, durable: survives restarts, tamper-evident
 npm run bench                             # kernel throughput
+POLICY_GUARD_CORPUS=<dir> npm run corpus:policy-guard   # cross-check the delegation path against an outside spending-policy corpus (not in this repo)
 node src/modelcheck.js 6                  # explicit-state model check: ~12,000 states, ~100 s
 node src/modelcheck.js 20 delegation      # agent-delegation model, exhausted: 1,767 states, ~27 s
 ```
@@ -84,3 +85,5 @@ curl -s -X POST --data-binary @pay.xml http://127.0.0.1:8787/api/iso/pacs008    
 - `src/iso20022.js` — pacs.008 / pacs.002 gateway
 - `docs/invariant-charter.md` — the seven invariants, where each is enforced, what checks it, and the limits
 - `test/*.test.js` — kernel, escrow/PayOnEvent, batch, sweep, storage, model check (with mutation tests), ISO 20022
+- `test/claims.test.js` + `test/claims-allowlist.json` — refuses claim words about settlement, status and regulation in every string and document this PoC ships, unless the same sentence qualifies them (simulated, proof of concept, not) or an exact allow-list entry gives a reason
+- `scripts/policy-guard-corpus.mjs` + `test/policy-guard-divergences.json` — the outside-corpus cross-check and its pinned list of differences of design (skipped when the corpus is not present)

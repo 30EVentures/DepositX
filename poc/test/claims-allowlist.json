@@ -1,0 +1,47 @@
+{
+  "_about": "Reviewed exceptions to test/claims.test.js. Each entry names one file, the exact normalised sentence, the one claim word it excuses, and why that use is not an overclaim. An entry that stops matching fails the test (it cannot rot). No entry is tagged 'tracked': the scan found no overclaim in kernel or network source strings, so nothing is deferred.",
+  "entries": [
+    {
+      "file": "README.md",
+      "term": "finality",
+      "string": "Legal finality and par are goals to be earned, not claims to be made.",
+      "reason": "A disclaimer, not a claim: it says legal finality is a goal to be earned. The \"not\" sits more than six words from the claim word."
+    },
+    {
+      "file": "README.md",
+      "term": "finality",
+      "string": "Do not use \"settles in under two seconds with legal finality\" externally yet.",
+      "reason": "Instructs readers NOT to use the phrase externally; the claim word is inside the quoted phrase being forbidden."
+    },
+    {
+      "file": "README.md",
+      "term": "production",
+      "string": "Production moves from H2 2028 to 30 Nov 2029 (plan), Nov 2030 (commit).",
+      "reason": "A roadmap milestone with a plan/commit date (\"production\" names a future phase), not a statement that anything is in production."
+    },
+    {
+      "file": "poc/docs/invariant-charter.md",
+      "term": "live",
+      "string": "mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key or a live grant's agent key, inside the grant's envelope; payee issuer must accept; the operator can move no balance; a grant can only narrow its parent and is dead if any ancestor is revoked or expired",
+      "reason": "Technical term, not a claim: \"live\" is the kernel grantStatus meaning not revoked and not expired (Ledger.grantStatus)."
+    },
+    {
+      "file": "poc/docs/invariant-charter.md",
+      "term": "production",
+      "string": "`iso20022.test.js` (within the kernel's 180 s window; a production gateway needs its own persistent UETR table); `batch.test.js`",
+      "reason": "Forward-looking requirement of a future gateway (\"needs its own persistent UETR table\"); claims nothing about this PoC."
+    },
+    {
+      "file": "poc/docs/invariant-charter.md",
+      "term": "guaranteed",
+      "string": "A Rust port with Verus/Kani proofs (spike S2) is the path to machine-checked guarantees.",
+      "reason": "Future-work statement; the preceding sentence says the Node kernel has not been audited. No guarantee is claimed today."
+    },
+    {
+      "file": "poc/docs/invariant-charter.md",
+      "term": "live",
+      "string": "8.3 `CANCEL_SWEEP` and `ESCROW_REFUND` accepted any live same-issuer grant with the right type and counterparties.",
+      "reason": "Technical term, not a claim: \"live grant\" means not revoked and not expired (Ledger.grantStatus), describing the bug that roadmap 8.3 fixed."
+    }
+  ]
+}
