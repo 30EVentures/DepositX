@@ -88,7 +88,7 @@ footer { margin-top: 18px; color: var(--slate); font-size: 12.5px; }
       <div><h1>DepositX</h1><div class="sub">Tokenized deposit network · proof of concept</div></div>
     </div>
     <div class="spacer"></div>
-    <span id="statusPill" class="pill ok">LIVE</span>
+    <span id="statusPill" class="pill ok">RUNNING</span>
     <span class="mono muted" id="hdrMeta"></span>
     <label class="muted" style="font-size:12px">Viewing as
       <select id="viewAsSel" aria-label="confidentiality view" style="margin-left:4px">
@@ -159,7 +159,7 @@ function statusOf() {
   if (S.halt) return ['bad', 'NETWORK HALTED'];
   const q = S.issuers.filter((i) => i.status !== 'ACTIVE');
   if (q.length) return ['warn', `QUARANTINE · ${q.map((i) => i.id).join(', ')}`];
-  return ['ok', 'LIVE'];
+  return ['ok', 'RUNNING'];
 }
 
 function renderHeader() {
@@ -332,7 +332,7 @@ function renderActions() {
       el('button', { class: 'go', onclick: () => act({ kind: 'resume', scope: 'network' }, 'Resume network.') }, 'Resume network'),
       ...S.issuers.filter((i) => i.status !== 'ACTIVE').map((i) => el('button', { class: 'go', onclick: () => act({ kind: 'resume', scope: 'issuer', issuer: i.id }, `Resume ${i.id}.`) }, `Resume ${i.id}`))),
     el('div', { class: 'row' },
-      el('button', { class: 'ghost', onclick: async () => { const r = await api('/api/verify'); say({ ok: r.ok, error: r.ok ? '' : 'REPLAY_MISMATCH', message: r.ok ? `Replayed ${r.blocks} blocks from genesis: identical state root ${r.stateRoot.slice(0, 16)}…` : 'An independent replay from genesis disagrees with the live state: something changed state outside the transaction log.' }, 'Verify.'); } }, 'Verify: replay from genesis'),
+      el('button', { class: 'ghost', onclick: async () => { const r = await api('/api/verify'); say({ ok: r.ok, error: r.ok ? '' : 'REPLAY_MISMATCH', message: r.ok ? `Replayed ${r.blocks} blocks from genesis: identical state root ${r.stateRoot.slice(0, 16)}…` : 'An independent replay from genesis disagrees with the current state: something changed state outside the transaction log.' }, 'Verify.'); } }, 'Verify: replay from genesis'),
       el('button', { class: 'ghost', onclick: async () => { say({ ok: true, message: 'Running 20,000 signed instructions through the kernel…' }); const r = await api('/api/bench'); say({ ok: r.invariantsHold, error: r.invariantsHold ? '' : 'INVARIANT', message: `${r.instructionsPerSecond.toLocaleString()} instructions/s (median block ${r.blockMsMedian} ms for ${r.blockSize}), all ${r.accepted.toLocaleString()} accepted, invariants hold. ${r.caveat}` }, 'Benchmark.'); } }, 'Benchmark kernel'),
       el('button', { class: 'ghost', onclick: () => act({ kind: 'reset' }, 'Reset.') }, 'Reset to genesis')));
 
@@ -360,7 +360,7 @@ function renderBlocks() {
   for (const b of S.blocks) {
     root.append(el('div', { class: 'blk' },
       el('div', { class: 'top' }, el('span', { class: 'h' }, '#' + b.height), el('span', { class: 'mono muted' }, b.hash.slice(0, 12) + '…'),
-        el('span', { class: 'tag' + (b.receiptOk ? '' : ' bad') }, `${b.finalSigs}/4 sigs · ${b.receiptOk ? 'final' : 'NOT FINAL'}`),
+        el('span', { class: 'tag' + (b.receiptOk ? '' : ' bad') }, `${b.finalSigs}/4 sigs · ${b.receiptOk ? 'receipt ok' : 'RECEIPT INVALID'}`),
         b.halt ? el('span', { class: 'tag bad' }, 'HALT ' + b.halt.reason) : null),
       b.txs.length === 0 ? el('div', { class: 'muted' }, 'heartbeat (empty block)') : b.txs.map((t) => el('div', {}, t.ok ? '✓ ' : '✗ ', el('b', { class: 'mono' }, t.type), t.ok ? el('span', { class: 'muted' }, ' ' + [...new Set(t.events)].filter((e) => !/CLOSED/.test(e)).join(', ')) : el('span', { style: 'color:var(--bad)' }, ' ' + t.error), t.caller && t.caller.kind === 'agent' ? el('span', { class: 'tag', style: 'margin-left:6px', title: t.caller.grant_id ? 'grant ' + t.caller.grant_id + (t.caller.label ? ' - ' + t.caller.label : '') + ' (derived by the kernel from the grant)' : (t.caller.label || 'agent') + ' (self-declared)' }, t.caller.grant_id ? 'agent · grant' : 'agent') : null))));
   }
