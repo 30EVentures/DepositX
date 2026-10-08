@@ -170,3 +170,51 @@ test('Network wrappers: escrowLock/escrowRelease/eventRelease/escrowRefund match
   void before2;
   allOk(n);
 });
+
+// Roadmap 8.2 (external audit finding): ESCROW_RELEASE checked only the raw signature on a
+// grant-held releaseRole, never whether the grant was still live. Revoking the agent's grant
+// did not stop it releasing escrow funds it already held a releaseRole claim on. The institution
+// locks these escrows with its own ops key; only the designated releaser is an agent grant.
+test('a grant-held escrow release role stops working the moment its grant is revoked or expired', () => {
+  const n = new Network();
+  const grant = n.grantAgent({ grantId: 'releaser-1', issuer: 'MPL', label: 'release bot', allowTypes: ['TRANSFER'], perInstructionMax: dollars(1000), window: { seconds: 86400, maxTotal: dollars(2000) }, counterparties: null, notAfter: n.now() + 3600 });
+  assert.ok(grant.ok, grant.message);
+
+  // live grant: release works exactly as a plain releaseRole would
+  const lock1 = n.escrowLock('MPL:acme', 'NSR:cedar', 'rel-live', dollars(100), { releaseRole: 'agent:releaser-1' });
+  assert.ok(lock1.ok, lock1.message);
+  const before = bal(n, 'NSR:cedar');
+  const rel1 = n.escrowRelease('rel-live');
+  assert.ok(rel1.ok, rel1.message);
+  assert.equal(bal(n, 'NSR:cedar'), before + dollars(100));
+
+  // revoked grant: the same releaseRole must now fail, and move nothing
+  const lock2 = n.escrowLock('MPL:acme', 'NSR:cedar', 'rel-revoked', dollars(50), { releaseRole: 'agent:releaser-1' });
+  assert.ok(lock2.ok, lock2.message);
+  assert.ok(n.revokeGrant('releaser-1').ok);
+  const before2 = bal(n, 'NSR:cedar');
+  const escBefore = canon(n.ledger.s.escrows.get('rel-revoked'));
+  assert.equal(n.escrowRelease('rel-revoked').error, 'GRANT_REVOKED');
+  assert.equal(bal(n, 'NSR:cedar'), before2, 'no money moved');
+  assert.equal(canon(n.ledger.s.escrows.get('rel-revoked')), escBefore, 'the escrow record is untouched, still refundable after expiry');
+  allOk(n);
+});
+
+test('a grant-held escrow release role stops working once its grant expires', () => {
+  const n = new Network();
+  const grant = n.grantAgent({ grantId: 'releaser-2', issuer: 'MPL', label: 'release bot', allowTypes: ['TRANSFER'], perInstructionMax: dollars(1000), window: { seconds: 86400, maxTotal: dollars(2000) }, counterparties: null, notAfter: n.now() + 100 });
+  assert.ok(grant.ok, grant.message);
+  const lock = n.escrowLock('MPL:acme', 'NSR:cedar', 'rel-expired', dollars(50), { expiresAt: n.now() + 7200, releaseRole: 'agent:releaser-2' });
+  assert.ok(lock.ok, lock.message);
+  n.advance(200); // past the grant's not_after, well before the escrow's own expiry
+  assert.equal(n.escrowRelease('rel-expired').error, 'GRANT_EXPIRED');
+  allOk(n);
+});
+
+test('a plain, non-grant releaseRole (the institution\'s own ops key) is unaffected by the grant-liveness check', () => {
+  const n = new Network();
+  const lock = n.escrowLock('MPL:acme', 'MPL:harbour', 'rel-plain', dollars(20));
+  assert.ok(lock.ok, lock.message);
+  assert.ok(n.escrowRelease('rel-plain').ok);
+  allOk(n);
+});

@@ -1,0 +1,127 @@
+{
+  "_about": "Pinned result of running the policy-guard/1 conformance corpus (see scripts/policy-guard-corpus.mjs) through the DepositX adapter. Every case NOT listed here AGREES. Reasons are ours. A case that newly diverges, or one that silently starts agreeing, fails test/policy-guard-divergences.test.js: review the change, then edit this file on purpose. This table records differences of design; it is not a defect list and no kernel behaviour was changed to produce agreement.",
+  "corpus": {
+    "profile": "policy-guard/1",
+    "version": "0.1.2",
+    "cases": 44
+  },
+  "divergences": {
+    "records/not-an-object": {
+      "status": "ABSTAINED",
+      "reason": "a non-object spend has nothing for the adapter to turn into a signed instruction; DepositX never sees a bare spend"
+    },
+    "records/null-record": {
+      "status": "ABSTAINED",
+      "reason": "a null spend has nothing for the adapter to turn into a signed instruction; DepositX never sees a bare spend"
+    },
+    "records/unknown-kind": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has no open kind vocabulary; only transfer-like instruction types exist, so an unknown kind has no counterpart"
+    },
+    "records/chain-without-family": {
+      "status": "ABSTAINED",
+      "reason": "DepositX is a single ledger with no chain id on a spend, so a malformed chain id cannot be expressed"
+    },
+    "records/chain-family-uppercase": {
+      "status": "ABSTAINED",
+      "reason": "DepositX is a single ledger with no chain id on a spend, so a malformed chain id cannot be expressed"
+    },
+    "records/empty-asset": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has exactly one asset and no asset field on an instruction, so an empty asset cannot be expressed"
+    },
+    "records/bridge-without-destination": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has no bridge kind"
+    },
+    "records/swap-with-destination": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has no swap kind (CONVERT and DvP exist but can never be granted to an agent)"
+    },
+    "records/amount-leading-zeros": {
+      "status": "DISAGREED",
+      "got": "DENY[INVALID_AMOUNT]",
+      "reason": "real difference: DepositX amounts are canonical decimal strings with no leading zeros (the string is inside the signed digest), so 0050 is refused where the other engine reads it as 50"
+    },
+    "records/amount-zero": {
+      "status": "DISAGREED",
+      "got": "DENY[INVALID_AMOUNT]",
+      "reason": "real difference: DepositX refuses a zero-cent transfer as a malformed amount; the other engine treats zero as a valid, under-cap spend"
+    },
+    "envelopes/envelope-for-another-chain": {
+      "status": "ABSTAINED",
+      "reason": "a grant is per issuer on one ledger; there is no per-chain envelope to miss"
+    },
+    "envelopes/kind-not-permitted": {
+      "status": "ABSTAINED",
+      "reason": "the record kind (bridge) has no DepositX counterpart, so the allowed-kinds check cannot be exercised"
+    },
+    "envelopes/asset-not-permitted": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has one asset and no asset allowlist on a grant"
+    },
+    "envelopes/asset-matches-case-insensitively": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has one asset and no asset allowlist on a grant"
+    },
+    "envelopes/destination-matches-case-insensitively": {
+      "status": "ABSTAINED",
+      "reason": "DepositX counterparties are exact account ids; whether two address spellings are one account is the adapter address book's call, not the kernel's"
+    },
+    "envelopes/swap-skips-the-destination-allowlist": {
+      "status": "ABSTAINED",
+      "reason": "DepositX has no swap kind, so the no-destination exemption has no counterpart"
+    },
+    "caps/per-tx-cap-exceeded": {
+      "status": "DISAGREED",
+      "got": "ESCALATE[ESCALATION_REQUIRED]",
+      "reason": "KEY DESIGN DIFFERENCE: over the grant max DepositX asks for the institution's co-signature (ESCALATE); it has no hard per-instruction refusal inside a grant, so the other engine's DENY has no counterpart"
+    },
+    "caps/per-tx-cap-beyond-double-precision": {
+      "status": "ABSTAINED",
+      "reason": "the envelope needs a 20-digit daily cap; DepositX amounts stop at 18 digits (the kernel refuses the grant), so the precision edge cannot be reached"
+    },
+    "caps/daily-cap-exceeded": {
+      "status": "DISAGREED",
+      "got": "ESCALATE[ESCALATION_REQUIRED]",
+      "reason": "KEY DESIGN DIFFERENCE: past the window cap DepositX escalates to the institution's co-signature instead of refusing (the amount also exceeds the per-instruction max under this mapping, so the window rule is not isolated by this case)"
+    },
+    "caps/per-tx-checked-before-daily": {
+      "status": "DISAGREED",
+      "got": "ESCALATE[ESCALATION_REQUIRED]",
+      "reason": "KEY DESIGN DIFFERENCE: both limits broken, DepositX escalates (one co-signature covers both) and reports no ordering of limits; the other engine denies and names the per-transaction cap first"
+    },
+    "ceiling/always-escalate-overrides-the-ceiling": {
+      "status": "ABSTAINED",
+      "reason": "a grant has no ask-every-time flag; per_instruction_max must be positive, so \"always escalate\" has no counterpart"
+    },
+    "envelope-shape/envelope-not-an-object": {
+      "status": "ABSTAINED",
+      "reason": "a non-object envelope has nothing the adapter can turn into a GRANT payload"
+    },
+    "envelope-shape/chain-missing": {
+      "status": "ABSTAINED",
+      "reason": "a DepositX grant has no chain field, so a missing chain cannot be expressed"
+    },
+    "envelope-shape/cap-is-a-number": {
+      "status": "ABSTAINED",
+      "reason": "the subject is perTxMax, which a DepositX grant does not have; the neighbouring daily and ceiling caps are checked as strings by the kernel"
+    },
+    "envelope-shape/per-tx-above-daily": {
+      "status": "ABSTAINED",
+      "reason": "the subject is the perTxMax versus dailyMax relation; DepositX has no perTxMax"
+    },
+    "envelope-shape/ceiling-above-per-tx": {
+      "status": "ABSTAINED",
+      "reason": "the subject is the ceiling versus perTxMax relation; DepositX has no perTxMax"
+    },
+    "envelope-shape/ceiling-equals-per-tx": {
+      "status": "ABSTAINED",
+      "reason": "the subject is the ceiling versus perTxMax relation; DepositX has no perTxMax"
+    }
+  },
+  "agreements_to_read_with_care": {
+    "caps/per-tx-cap-exact": "agrees (ESCALATE) only because 1000 is also above the mapped per-instruction max of 100; DepositX has no per-transaction ceiling that this case could land exactly on",
+    "caps/daily-cap-exact": "agrees (ESCALATE) only because 500 is above the mapped per-instruction max of 100; the exactly-equals-the-window edge is not isolated here (delegation.test.js covers it)"
+  }
+}
