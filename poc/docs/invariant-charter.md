@@ -267,3 +267,51 @@ commit shows the same spread, so it is not caused by this pass. The earlier-reco
 roadmap 5-7 and is not directly comparable. The likely cause is wall-clock time leaking into which
 representative of an aliased state is explored first; it was not investigated further. The routine depth-5
 figure is stable (3,793). Treat depth-6 state counts as accurate to roughly two states.
+
+### Roadmap 8.5: grant binding is mandatory (2026-10-12)
+
+Found while checking whether a same-holder splice is refused (`docs/grant-binding-proposal.md`). Links between
+grants were already bound: a child carries its parent's exact `grant_id` in the signed payload. Ordinary
+instructions were not: the grant that authorised one was chosen by the role label `agent:<id>` on the signature,
+which is outside the signed digest, and two grants may share one agent key. With a shared key, a relayer could
+move signed bytes from a narrow grant onto a broad one (measured: a $500 transfer signed under a $100-cap grant
+returned `ESCALATION_REQUIRED`; the same bytes relabelled onto the other grant were accepted, recorded under the
+wrong grant, and charged to its window). It is not a way for a key holder to do more than the holder could
+already do; it takes the choice of envelope, the audit attribution and the window accounting away from the signer.
+
+**Fix (option A, mandatory).** The signed digest gains a `grant` field. An instruction carrying an `agent:<id>`
+signature must carry `grant` equal to `<id>` or it is refused `GRANT_MISMATCH`; an instruction with no agent
+signature must carry none. The check is in `#checkEnvelope`, so it covers batch legs, sub-grants, revocation by
+an ancestor and an agent `releaseRole` alike, and compares two caller-supplied strings only (it says nothing
+about which grants exist). `canon` drops an undefined key, so the digest of every instruction with no agent
+signature is byte for byte what it was. The institution's escalation co-signature is not in the digest and is
+unaffected. `Network.tx()` binds automatically when exactly one `agent:` role is signed for, so callers using
+`agentTx`, `grantTx` and `revokeGrant` change nothing; an external agent that builds instructions by hand must set `grant`
+(`GET /api/schema` and the error catalogue say so).
+
+**Cost, stated plainly.** Mandatory binding changes what a valid agent-signed instruction is, so a stored chain
+holding agent-signed instructions made before this change would fail replay. The same was true of earlier
+additions to the digest (`caller`, `batch_digest`). This proof of concept has no deployed chain, so no activation
+height was added; any real store would need one or a domain-tag bump. The change also touches the `#authorize` /
+envelope region that the unmerged hardening-x1 branch edits, so that branch will conflict when rebased.
+
+**Model-check coverage.** The delegation alphabet goes from 21 to 24 actions: a second root grant `g4` that shares
+`g1`'s key and is broader ($10 / $10), a legitimate `g4` transfer, and the attack "relabel a signed g1 $3 transfer
+(which needs the institution's signature) onto g4", which must always be refused and inert. The S6 oracle gains
+clause (f): an accepted agent-signed instruction's signed `grant` equals the grant of its agent role. One new
+planted bug (a kernel that rewrites the declared grant to match the role label after the digest is computed, so
+the relabel passes) is caught, in a four-step counterexample (mint, mint, grant g4, then the attack),
+by the attack being accepted. Clause (f) reads the instruction's own `grant` field, so it cannot catch a bug
+that rewrites that field; the attack action is what catches that one. Because the search is exhaustive over the
+alphabet and not over key reuse in general, it covers the shared key of g1 and g4 and nothing more.
+
+| Run | Actions | Depth | States | Transitions | Time | Failures |
+|---|---|---|---|---|---|---|
+| Delegation model, routine (`modelcheck.test.js`) | 24 | 9 | 5,575 | 87,576 | ~66 s (whole file ~123 s) | 0 |
+| Delegation model, one-off (`node src/modelcheck.js 20 delegation`) | 24 | 16 | **12,478, exhausted** | 299,472 | 215.8 s | 0 |
+| Base model, `Date.now` pinned, depth 5 / 6 | unchanged | 5 / 6 | 3,793 / 13,442 | 40,680 / 151,720 | n/a | 0 |
+
+The base-model counts are identical to those before the change (the base alphabet builds no agent instruction),
+which is what binding should do. The routine delegation test was raised from 5,000 to 8,000 states so the
+depth-9 search does not stop at its cap, and it now asserts that it did not.
+

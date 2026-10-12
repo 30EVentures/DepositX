@@ -5,18 +5,18 @@
 // must stay green). But the grant that authorises an ordinary instruction is chosen by the ROLE LABEL on
 // the signature (`agent:<grant_id>`), and that label is not inside the signed digest. When two grants of
 // one issuer share an agent key, the same signed bytes verify under either label, so a relayer can move an
-// instruction from a narrow grant into a broad one. The RED test below demonstrates it.
+// instruction from a narrow grant into a broad one. The first test below demonstrates it (it was red before the fix).
 //
-// THIS FILE IS INTENTIONALLY RED BY EXACTLY ONE TEST on the current kernel. It asserts the property, not a
-// remedy, so both fixes proposed in docs/grant-binding-proposal.md turn it green: binding the grant id into
-// the signed digest (the instruction is refused), or refusing to reuse an agent key across live grants (the
-// second grant cannot be created, so there is nothing to splice into).
+// STATUS: the fix (mandatory `grant` inside the signed digest, docs/grant-binding-proposal.md Option A) is in the
+// kernel and this file is green. The ATTACK test asserts the property, not the remedy, so it would equally have gone
+// green under Option B (a shared agent key refused). The BOUND tests pin the mechanism.
 //
-//   node --test test/grant-binding.test.js        # 1 fail, 3 pass until the kernel is changed
+//   node --test test/grant-binding.test.js
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Network, dollars } from '../src/network.js';
-import { genKey } from '../src/crypto.js';
+import { genKey, canon } from '../src/crypto.js';
+import { messageOf } from '../src/kernel.js';
 
 const one = (n, t) => n.submit([t]).results[0];
 const acme = (n) => n.ledger.s.accounts.get('MPL:acme').balance;
@@ -31,8 +31,8 @@ function sharedKeyGrants(n) {
 }
 const over = (n) => n.agentTx('p1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(500).toString() }, ['screen:MPL']); // $500 > p1's $100 per-instruction max
 
-// ------------------------------------------------------------------ RED
-test('RED: an agent-signed instruction cannot be moved onto a different grant that shares the signer key', () => {
+// ------------------------------------------------------------------ ATTACK (red before the fix)
+test('ATTACK: an agent-signed instruction cannot be moved onto a different grant that shares the signer key', () => {
   const n = new Network();
   const { p2 } = sharedKeyGrants(n);
   if (!p2.ok) { assert.equal(typeof p2.error, 'string'); return; } // remedy B: a shared key cannot be registered, so no splice is possible
@@ -70,7 +70,7 @@ test('PIN: a same-holder splice of a child link is refused, by relabelling the s
 
   const relabelled = child('c2'); // signed for parent p1, role relabelled to the other same-key grant
   relabelled.sigs = { 'agent:p2': relabelled.sigs['agent:p1'] };
-  assert.equal(one(n, relabelled).error, 'MISSING_SIGNATURE'); // a sub-grant must be signed under agent:<payload.parent>
+  assert.ok(['MISSING_SIGNATURE', 'GRANT_MISMATCH'].includes(one(n, relabelled).error)); // GRANT_MISMATCH once the signing grant is bound; before it, a sub-grant not signed under agent:<payload.parent> was MISSING_SIGNATURE
 
   const repointed = child('c3'); // payload.parent changed to p2, signature kept
   const sig = repointed.sigs['agent:p1'];
@@ -88,4 +88,66 @@ test('PIN: the instruction exactly as signed under the narrow grant still needs 
   assert.equal(one(n, over(n)).error, 'ESCALATION_REQUIRED');
   const escalated = n.agentTx('p1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(500).toString() }, ['screen:MPL'], { escalate: true });
   assert.ok(one(n, escalated).ok, 'a fix must not weaken the escalation path');
+});
+
+// ------------------------------------------------------------------ MANDATORY BINDING (the fix)
+test('BOUND: every agent-signed instruction must name its grant inside the signed bytes', () => {
+  const n = new Network();
+  sharedKeyGrants(n);
+  const mk = () => n.agentTx('p2', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString() }, ['screen:MPL']);
+
+  const t = mk();
+  assert.equal(t.grant, 'p2', 'the builder binds the grant it signs under');
+
+  const missing = mk(); // signed with no grant in the digest, as an old client would
+  delete missing.grant;
+  assert.equal(one(n, missing).error, 'GRANT_MISMATCH');
+
+  const wrong = mk();
+  wrong.grant = 'p1'; // declared grant differs from the agent role
+  assert.equal(one(n, wrong).error, 'GRANT_MISMATCH');
+
+  const stray = n.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString() }, ['ops:MPL', 'screen:MPL']);
+  stray.grant = 'p2'; // a grant named on an instruction no agent signed
+  assert.equal(one(n, stray).error, 'GRANT_MISMATCH');
+
+  assert.ok(one(n, t).ok, 'the correctly bound instruction is accepted');
+  assert.equal(n.ledger.s.grants.get('p2').win.spent, dollars(5), 'and charged to the grant it named');
+});
+
+test('BOUND: relabel plus re-declare is not a way round it - the declared grant is signed, so the signature breaks', () => {
+  const n = new Network();
+  sharedKeyGrants(n);
+  const t = over(n);
+  const { 'agent:p1': sig, ...others } = t.sigs;
+  t.sigs = { ...others, 'agent:p2': sig };
+  t.grant = 'p2';
+  assert.equal(one(n, t).error, 'BAD_SIGNATURE');
+  assert.equal(n.ledger.s.grants.get('p2').win.spent, 0n);
+});
+
+test('BOUND: two agent signatures are refused; instructions without an agent signature keep their old digest byte for byte', () => {
+  const n = new Network();
+  sharedKeyGrants(n);
+  const two = n.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString() }, ['agent:p1', 'agent:p2', 'screen:MPL'], { keyOverride: {} });
+  assert.equal(two.grant, undefined, 'ambiguous: no single grant is named');
+  assert.equal(one(n, two).error, 'MULTIPLE_AGENT_SIGS');
+
+  const plain = n.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString() }, ['ops:MPL', 'screen:MPL']);
+  assert.equal('grant' in plain, false);
+  const legacy = { d: 'depositx-poc-v1', chain: n.genesis.chainId, inst_id: plain.inst_id, type: plain.type, payload: plain.payload, valid_until: plain.valid_until, caller: plain.caller, batch_digest: plain.batch_digest };
+  assert.equal(messageOf(plain, n.genesis.chainId), canon(legacy), 'the digest of a non-agent instruction is unchanged');
+});
+
+test('BOUND: a sub-grant and a revocation by an ancestor name their signing grant, name their signing grant', () => {
+  const n = new Network();
+  sharedKeyGrants(n);
+  const { tx } = n.grantTx({ grantId: 'c9', issuer: 'MPL', parent: 'p1', label: 'child', allowTypes: ['TRANSFER'], perInstructionMax: dollars(50), window: { seconds: 86400, maxTotal: dollars(200) }, counterparties: null, notAfter: null, key: genKey() });
+  assert.equal(tx.grant, 'p1');
+  assert.ok(one(n, tx).ok);
+  const rv = n.tx('REVOKE_GRANT', { grant_id: 'c9' }, ['agent:p1']);
+  assert.equal(rv.grant, 'p1');
+  rv.grant = 'p2';
+  assert.equal(one(n, rv).error, 'GRANT_MISMATCH');
+  assert.ok(n.revokeGrant('c9', { by: 'p1' }).ok);
 });

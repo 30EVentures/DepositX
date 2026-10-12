@@ -213,3 +213,12 @@ Independent of whether this is approved:
 - **6.2** `POST /api/submit`, `GET /api/schema`, `GET /api/grants`; dashboard shows grant headroom.
 - **6.3** Model checker: S6 plus the new actions; four mutation tests.
 - **6.4** Docs: README table row, "What it is NOT" update, invariant-charter entry with measured numbers.
+
+## 10. Amendments after the build
+
+- **Grant binding (roadmap 8.5, 2026-10-12).** The grant an agent signs under is now named inside the signed
+  digest (`grant`), mandatory for any instruction carrying an `agent:<grant_id>` signature, else `GRANT_MISMATCH`.
+  This closes a splice that sections 6 and 7 did not consider: with two grants sharing one agent key, the role
+  label alone chose the grant, so a relayer could move signed bytes onto the broader one. See
+  `grant-binding-proposal.md` and `invariant-charter.md`.
+

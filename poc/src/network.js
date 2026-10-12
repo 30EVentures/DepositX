@@ -35,6 +35,7 @@ export const ERROR_CATALOG = {
   ESCROW_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that locked this escrow, or one of its ancestors, may refund it. Ask the institution, or the locking grant itself, to refund it.' },
   AGENT_QUEUE_UNSUPPORTED: { retryable: true, remedy: 'An agent-authorised PAYMENT cannot be queued for liquidity-saving netting yet. Retry with queueIfShort false (it will be refused while the settlement position is short), or once the payer issuer\'s position covers the amount, or ask the institution to submit it with its own signature.' },
   ESCROW_ACCOUNT_RESERVED: { retryable: false, remedy: 'The account is an escrow holding account (<issuer>:escrow:<id>). Its money moves only through ESCROW_RELEASE, EVENT_RELEASE or ESCROW_REFUND for that escrow; address the beneficiary or payer account instead.' },
+  GRANT_MISMATCH: { retryable: false, remedy: "An instruction signed by an agent must carry a `grant` field equal to the grant_id of its single `agent:<grant_id>` signature, and `grant` is part of the signed bytes. Set `grant`, sign again with a new inst_id, and do not relabel a signature after signing. An instruction with no agent signature must not carry `grant`." },
   BATCH_LEG_MISBOUND: { retryable: false, remedy: 'This instruction was signed with a batch_digest binding it to a specific set and order of legs. Submit it inside exactly that batch, unchanged, or re-sign it with a new inst_id and no batch_digest to run it standalone.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
 };
@@ -231,8 +232,11 @@ export class Network {
   // legs hash to this digest (see `batchDigestOf` in kernel.js) - also part of the signed digest.
   tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId, caller, batchDigest } = {}) {
     const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, caller: caller || { kind: 'unspecified' }, batch_digest: batchDigest || null, sigs: {} };
+    // grant binding: an agent-signed instruction names its grant inside the signed bytes (the kernel requires it)
+    const agentRoles = roles.filter((r) => r.startsWith('agent:'));
+    if (agentRoles.length === 1) t.grant = agentRoles[0].slice('agent:'.length);
     // sign using the same canonical message the kernel verifies
-    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller, batch_digest: t.batch_digest });
+    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller, batch_digest: t.batch_digest, grant: t.grant || undefined });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
   }
@@ -276,7 +280,7 @@ export class Network {
     const types = Object.getOwnPropertyNames(Ledger.prototype).filter((k) => k.startsWith('tx_')).map((k) => k.slice(3)).sort().map((type) => ({ type, grantable: GRANTABLE_TYPES.includes(type), signatures: SIG[type] || null }));
     return {
       version: 'depositx-poc-schema/1',
-      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest }', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
+      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'grant?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest, grant } (grant omitted when absent)', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', grant: 'REQUIRED, and signed, on every instruction that carries an agent:<grant_id> signature, and equal to that grant_id (else GRANT_MISMATCH); must be absent otherwise. It stops a relayer moving signed bytes onto another grant that shares the agent key', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
       grantable_types: GRANTABLE_TYPES,
       types,
       errors: ERROR_CATALOG,

@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Network, dollars } from '../src/network.js';
+import { genKey } from '../src/crypto.js';
 
 const inv = (n) => n.ledger.checkInvariants(n.ledger.s.time);
 const allOk = (n) => assert.deepEqual(inv(n).violations, [], 'no invariant violations');
@@ -225,10 +226,14 @@ test('an agent key cannot authorise for a different issuer, and an unknown grant
   const n = setup(); // MPL grant
   const t = n.agentTx('sweeper-1', 'TRANSFER', { from: 'NSR:cedar', to: 'NSR:pinnacle', amount: dollars(1).toString() }, ['screen:NSR']);
   assert.equal(one(n, t).error, 'GRANT_WRONG_ISSUER');
+  // an instruction honestly signed under a grant that does not exist (it names that grant, as binding requires)
+  const ghost = n.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['agent:nope', 'screen:MPL'], { keyOverride: { 'agent:nope': genKey().priv } });
+  assert.equal(one(n, ghost).error, 'UNKNOWN_GRANT');
+  // relabelling a real grant's signature to a name it did not sign under is refused by grant binding (GRANT_MISMATCH)
   const u = xfer(n, 'sweeper-1', 1);
   u.sigs['agent:nope'] = u.sigs['agent:sweeper-1'];
   delete u.sigs['agent:sweeper-1'];
-  assert.equal(one(n, u).error, 'UNKNOWN_GRANT');
+  assert.equal(one(n, u).error, 'GRANT_MISMATCH');
 });
 
 test('a forged agent signature (another key) is BAD_SIGNATURE', () => {

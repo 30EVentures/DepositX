@@ -79,11 +79,15 @@ const totalMoney = (net) => {
 // always sign for the grants it contains. g1: root, MPL, may TRANSFER/PAYMENT and sub-delegate, max $2 per
 // instruction and $2 per window. g2: sub-grant of g1, TRANSFER only, $1 / $2. g3 only ever appears in
 // attacks. The amounts are chosen so a numeric-vs-lexicographic comparison bug is reachable: "1000" <= "200".
+// g4 (roadmap 8.5, grant binding) is a second ROOT grant of the same issuer that SHARES g1's agent key and is broader
+// (max $10 / cap $10): the precondition of the same-holder splice. Signed bytes must never move from g1 onto g4.
 const GK = { g1: genKey(), g2: genKey(), g3: genKey() };
-const TOPO = { g1: null, g2: 'g1', g3: 'g1' };
+GK.g4 = GK.g1;
+const TOPO = { g1: null, g2: 'g1', g3: 'g1', g4: null };
 const SWEEP_OWNER = { s9: 'g1' }; // the sweep only g1's agent ever registers (the institution's own is s1)
 const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT', 'REGISTER_SWEEP', 'CANCEL_SWEEP'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
 const G2 = { grantId: 'g2', issuer: 'MPL', label: 'sub agent', parent: 'g1', allowTypes: ['TRANSFER', 'CANCEL_SWEEP'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g2 };
+const G4 = { grantId: 'g4', issuer: 'MPL', label: 'broad agent sharing g1\'s key', allowTypes: ['TRANSFER'], perInstructionMax: dollars(10), window: { seconds: 86400, maxTotal: dollars(10) }, key: GK.g4 };
 const agentXfer = (net, gid, amt, opts) => net.submitSigned(net.agentTx(gid, 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(amt).toString() }, ['screen:MPL'], opts));
 const agentPay = (net, gid, amt) => net.submitSigned(net.agentTx(gid, 'PAYMENT', { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(amt).toString(), queueIfShort: false }, ['screen:MPL', 'accept:NSR']));
 
@@ -109,6 +113,16 @@ export const DELEGATION_ACTIONS = [
   { name: 'ATTACK batch mixing a g1 leg with an institution-signed leg', kind: 'attack', run: (net) => net.submitSigned(net.tx('BATCH', { legs: [net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['screen:MPL']), net.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, ['ops:MPL', 'screen:MPL'])] }, [])) },
   { name: 'ATTACK agent g1 transfer $3 WITHOUT the institution co-signature', kind: 'attack', run: (net) => agentXfer(net, 'g1', 3) },
   { name: 'ATTACK agent g2 signs a PAYMENT (not in its allow_types)', kind: 'attack', run: (net) => agentPay(net, 'g2', 1) },
+  // roadmap 8.5: grant binding. g4 shares g1's key. A $3 transfer signed under g1 needs the institution's co-signature;
+  // relabelled onto g4 (max $10) by a relayer it must still be refused and inert.
+  { name: "grant g4 (a second root grant sharing g1's key: TRANSFER, max $10, cap $10)", kind: 'legit', run: (net) => net.grantAgent(G4) },
+  { name: 'agent g4 transfer acme->harbour $1', kind: 'legit', run: (net) => agentXfer(net, 'g4', 1) },
+  { name: 'ATTACK relabel a signed g1 $3 transfer onto g4 (same key, broader envelope)', kind: 'attack', run: (net) => {
+    const t = net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(3).toString() }, ['screen:MPL']);
+    const { 'agent:g1': sig, ...others } = t.sigs;
+    t.sigs = { ...others, 'agent:g4': sig };
+    return net.submitSigned(t);
+  } },
   { name: 'ATTACK sub-grant g3 under g1 widening max to $10', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER'], perInstructionMax: dollars(10) }) },
   { name: 'ATTACK sub-grant g3 under g1 adding ESCROW_LOCK', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER', 'ESCROW_LOCK'] }) },
 ];
@@ -162,6 +176,8 @@ function checkDelegation(pre, net) {
     const role = Object.keys(tx.sigs || {}).find((r) => r.startsWith('agent:'));
     if (!role) return;
     const gid = role.slice(6);
+    // S6(f), grant binding: the grant an accepted agent instruction ran under is the grant its signed bytes name
+    if (tx.grant !== gid) out.push(`accepted ${tx.type} signed as agent:${gid} whose signed grant is ${JSON.stringify(tx.grant)}`);
     const chain = chainOf(gid);
     if (tx.type === 'REVOKE_GRANT') {
       let anc = false;

@@ -26,9 +26,15 @@ test('submitSigned never signs: an unsigned instruction is rejected, not complet
   grant(n);
   const t = xfer(n, 100);
   t.sigs = {};
-  const r = n.submitSigned(t);
+  const r = n.submitSigned(t); // still names a grant but has no agent signature: refused by grant binding
   assert.equal(r.ok, false);
-  assert.match(r.error, /MISSING_SIGNATURE|MALFORMED|UNKNOWN/);
+  assert.match(r.error, /GRANT_MISMATCH|MISSING_SIGNATURE|MALFORMED|UNKNOWN/);
+  const u = xfer(n, 100); // fully stripped (no signatures, no grant): refused for the missing signature
+  u.sigs = {};
+  delete u.grant;
+  const r2 = n.submitSigned(u);
+  assert.equal(r2.ok, false);
+  assert.match(r2.error, /MISSING_SIGNATURE|MALFORMED|UNKNOWN/);
 });
 
 test('submitSigned returns structured errors for garbage instead of throwing', () => {

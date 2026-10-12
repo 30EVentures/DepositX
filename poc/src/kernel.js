@@ -106,7 +106,7 @@ const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
   if (!m) {
-    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' }, batch_digest: tx.batch_digest || null });
+    m = canon({ d: 'depositx-poc-v1', chain: chainId, inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, caller: tx.caller || { kind: 'unspecified' }, batch_digest: tx.batch_digest || null, grant: tx.grant || undefined });
     msgCache.set(tx, m);
   }
   return m;
@@ -974,6 +974,17 @@ export class Ledger {
       const shaped = typeof c === 'object' && !Array.isArray(c) && Object.keys(c).every((k) => k === 'kind' || k === 'label')
         && typeof c.kind === 'string' && c.kind.length >= 1 && c.kind.length <= 20 && (c.label === undefined || (typeof c.label === 'string' && c.label.length <= 80));
       need(shaped, 'CALLER_MISMATCH', 'a declared caller is {kind, label?} only (kind up to 20 characters, label up to 80)');
+    }
+    // Grant binding: the grant an agent signs under is NAMED INSIDE the signed bytes (`grant`), and must be the
+    // grant of its `agent:<id>` role. Without this the role label alone chose the grant, and a relayer could move
+    // signed bytes onto another grant sharing the key. Compares two caller-supplied strings only, so it reveals
+    // nothing about which grants exist. Instructions with no agent signature must carry no `grant`.
+    const agentRoles = Object.keys(tx.sigs || {}).filter((r) => r.startsWith('agent:'));
+    if (agentRoles.length > 0) {
+      need(agentRoles.length === 1, 'MULTIPLE_AGENT_SIGS', 'at most one agent signature per instruction');
+      need(tx.grant === agentRoles[0].slice('agent:'.length), 'GRANT_MISMATCH', 'an agent-signed instruction must name, inside its signed bytes, the grant of its agent signature');
+    } else {
+      need(tx.grant == null, 'GRANT_MISMATCH', 'grant is set but there is no agent signature');
     }
     const h = this['tx_' + tx.type];
     need(typeof h === 'function' && !tx.type.startsWith('_'), 'UNKNOWN_TYPE');

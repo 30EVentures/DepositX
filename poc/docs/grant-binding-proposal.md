@@ -1,7 +1,9 @@
 # Proposal: bind the grant an agent signs under (same-holder splice), and a money check on GRANT
 
-Status: **proposal only, 2026-10-11, for review. No kernel code was changed.** The failing test is
-`test/grant-binding.test.js` (intentionally red by exactly one test on the current kernel). Follows
+Status: **IMPLEMENTED 2026-10-12 as Option A, mandatory** (on branch `dx7-counsel-and-grant-binding`, local, not
+pushed, not merged), on Caleb's instruction "implement the grant-binding fix, mandatory". Sections 1 to 3 are the
+original finding and are left as written; section 9 records what was built and measured. The test file
+`test/grant-binding.test.js` was red by exactly one test before the fix and is green now. Follows
 `agent-native-access-proposal.md`; the open items X3 and X4 there are separate.
 
 ## 1. The question, answered
@@ -47,7 +49,7 @@ key, so one agent holding several grants of one issuer is a natural configuratio
 
 `test/grant-binding.test.js`, run with `node --test test/grant-binding.test.js`:
 
-- **RED (1):** a signed instruction cannot be moved onto a different grant that shares the signer key. It
+- **ATTACK (1, red before the fix):** a signed instruction cannot be moved onto a different grant that shares the signer key. It
   asserts the *property*, not a remedy, so either fix below turns it green (Option B by making the second grant
   impossible to create).
 - **PINS (3, green today, must stay green):** a child link carries the parent's exact id; a same-holder splice of a
@@ -161,3 +163,37 @@ Two soft spots, neither on the ledger path, recorded rather than ignored:
    bump for any stored chain that contains agent-signed instructions?
 3. **Fix the two helper soft spots** (section 7) as a separate small item?
 4. **Is a branch with one intentionally red test acceptable** until the fix is confirmed? It is not for merge in that state.
+
+## 9. What was implemented and measured (2026-10-12)
+
+Option A, mandatory, as sketched in section 4.
+
+- `src/kernel.js`: `messageOf` adds `grant: tx.grant || undefined` to the signed digest; `#checkEnvelope` requires
+  `tx.grant` to equal the id of the single `agent:` signature (`GRANT_MISMATCH`, `MULTIPLE_AGENT_SIGS` hoisted
+  there) and refuses a stray `grant` on an instruction with no agent signature.
+- `src/network.js`: `tx()` binds the grant when exactly one `agent:` role is signed for and signs it; the error
+  catalogue has `GRANT_MISMATCH` with a remedy; `GET /api/schema` lists `grant?` and the new digest.
+- Tests: `grant-binding.test.js` now 8 (the attack test and three pins, plus four BOUND tests: missing, wrong and
+  stray `grant`; relabel-and-re-declare is `BAD_SIGNATURE`; two agent signatures; a non-agent digest identical to
+  the old one; sub-grant and ancestor revocation). Two existing tests were changed because they relied on
+  relabelling a signature: `delegation.test.js` (an unknown grant is now provoked by an honestly signed
+  instruction naming it; the relabel gets `GRANT_MISMATCH`) and `agent-interface.test.js` (an unsigned instruction
+  that still names a grant gets `GRANT_MISMATCH`; a fully stripped one still gets `MISSING_SIGNATURE`). The
+  same-holder-splice pin now accepts `GRANT_MISMATCH` as well as `MISSING_SIGNATURE`, as it already did for
+  `BAD_SIGNATURE`. The policy-guard adapter needed no change (it signs through `Network.tx()`, which binds).
+- Model checker: 24 delegation actions, oracle clause S6(f), one new planted bug; see
+  `invariant-charter.md`, "Roadmap 8.5", for the numbers.
+
+| Measure | Result |
+|---|---|
+| Full suite (`npm test`) | 182/182 |
+| Delegation model, exhaustive | 12,478 states, 299,472 transitions, depth 16, 0 failures, 215.8 s |
+| Base model, `Date.now` pinned | depth 5: 3,793 / 40,680; depth 6: 13,442 / 151,720; unchanged |
+
+The earlier estimate for the throwaway copy was 175/177 with two explained failures; the real change needed the
+same two test edits and the numbers above supersede that estimate.
+
+Still open: whether a real store needs an activation height or domain-tag bump (not needed here, there is no
+deployed chain); option B (refuse reuse of an agent key) was not built and is not needed for the property; the
+two helper soft spots in section 7 are untouched; the AIP content-hash `parent` (option C) is an export concern.
+
