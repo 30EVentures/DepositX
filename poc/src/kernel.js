@@ -564,6 +564,10 @@ export class Ledger {
     const A = this.#issuer(from.issuer);
     need(A.status === 'ACTIVE', 'ISSUER_QUARANTINED', `${A.id} is quarantined`);
     if (A.sp < x && p.queueIfShort) {
+      // A queued payment is settled later by NET_CYCLE, which re-verifies the institution's own signatures on the
+      // stored copy. An agent-authorised payment has none, so it would be charged to the grant and then never
+      // settle. Refuse it now (nothing is charged: the journal rolls back) until netting understands grants.
+      need(!this.#derived, 'AGENT_QUEUE_UNSUPPORTED', 'an agent-authorised payment cannot wait in the netting queue; submit it when the settlement position covers it');
       need(from.balance >= x, 'INSUFFICIENT_FUNDS');
       j.field(this.s, 'queue', [...this.s.queue, { instId: tx.inst_id, queuedAt: time, tx: { inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, ...this.#effectiveCaller(tx), sigs: tx.sigs } }]);
       events.push({ type: 'QUEUED', issuer: A.id, id: tx.inst_id, amount: x.toString(), from: from.id, to: to.id });

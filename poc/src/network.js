@@ -33,6 +33,7 @@ export const ERROR_CATALOG = {
   BATCH_MIXED_CALLERS: { retryable: false, remedy: 'Every leg of a batch must have the same effective caller: all authorised by the same grant, or all signed by the institution with the same declared caller. Split it into one batch per caller.' },
   SWEEP_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that registered this sweep, or one of its ancestors, may cancel it. Ask the institution, or the registering grant itself, to cancel it.' },
   ESCROW_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that locked this escrow, or one of its ancestors, may refund it. Ask the institution, or the locking grant itself, to refund it.' },
+  AGENT_QUEUE_UNSUPPORTED: { retryable: true, remedy: 'An agent-authorised PAYMENT cannot be queued for liquidity-saving netting yet. Retry with queueIfShort false (it will be refused while the settlement position is short), or once the payer issuer\'s position covers the amount, or ask the institution to submit it with its own signature.' },
   BATCH_LEG_MISBOUND: { retryable: false, remedy: 'This instruction was signed with a batch_digest binding it to a specific set and order of legs. Submit it inside exactly that batch, unchanged, or re-sign it with a new inst_id and no batch_digest to run it standalone.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
 };
