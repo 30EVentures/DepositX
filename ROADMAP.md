@@ -602,8 +602,8 @@ agent consuming this message could reasonably read that phrase as a real
 finality guarantee this PoC does not provide.
 
 **Fix.** Reword to something accurate - e.g. "ledger-accepted (simulated
-consensus)" - that still says the block is final on this ledger without implying
-real multi-party consensus.
+consensus)" - that says only that this ledger accepted the instruction, without
+implying finality or real multi-party consensus.
 
 **Acceptance criteria**
 - [x] The ACSC `AddtlInf` string no longer contains the phrase "consensus

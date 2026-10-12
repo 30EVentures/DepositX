@@ -371,7 +371,8 @@ export class Network {
     return block;
   }
 
-  // A finality receipt is verifiable offline: header hash plus at least QUORUM validator signatures.
+  // A block receipt is verifiable offline: header hash plus at least QUORUM validator signatures. Here all four
+  // validator keys live in one process, so it shows the host's own signing, not independent agreement.
   static verifyReceipt(genesis, block) {
     if (!block || !block.header || block.header.chainId !== genesis.chainId) return false; // a receipt proves its own chain only
     if (sha256(canon(block.header)) !== block.hash) return false;
@@ -736,7 +737,7 @@ export class Network {
     ];
     void anyViol;
     const blocks = this.blocks.slice(-40).reverse().map((b) => ({
-      height: b.height, hash: b.hash, time: b.header.time, finalSigs: Object.keys(b.sigs).length, quorum: b.quorum,
+      height: b.height, hash: b.hash, time: b.header.time, quorumSigs: Object.keys(b.sigs).length, quorum: b.quorum,
       halt: b.header.halt, receiptOk: b.receiptOk, txs: b.results.map((r) => ({ type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events.map((e) => e.type), caller: r.caller })), stateRoot: b.header.stateRoot,
     }));
     return js({

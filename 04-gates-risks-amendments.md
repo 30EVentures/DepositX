@@ -124,6 +124,8 @@ CFO's **pivots**: P1 lean operator (~60 FTE, outsourced 24/7 NOC, ~$39M/yr run c
 | "Not a stablecoin" | "A deposit at a regulated bank, recorded on a shared ledger." | Same | "New digital currency" |
 | "Bearer-recorded claim" | Drop | | "Bearer" (an account-based deposit is not a bearer instrument) |
 
+**Claims flag (2026-10-12, unresolved, for the claims owner):** the "Approved wording now" cell for "Legal finality" reads "Reaches consensus finality in under two seconds (median, measured)", but nothing has been measured: the bake-off is only starting, and the proof of concept simulates its consensus in one process, so it supports no finality or latency wording of any kind. Under this section's own rule (no public claim without a claim ID and an evidence source) that sentence is usable only once a measurement exists; until then the "Sub-two-second" row's template ("Median consensus finality Ys, p99 Zs, as of [date], on [load]") is the safe form. The same cell appears in `board/strategy-risk-challenge.md` §6. This file does not change the approved wording.
+
 ## 8. Blueprint amendments (v0.9 → v1.0), consolidated
 
 | # | v0.9 statement | Amendment |
