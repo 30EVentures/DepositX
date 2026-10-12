@@ -945,7 +945,14 @@ export class Ledger {
       return { instId: tx.inst_id, type: tx.type, ok: true, events, caller: this.#derived || tx.caller || { kind: 'unspecified' } };
     } catch (e) {
       j.rollback();
-      if (!(e instanceof KernelError)) throw e;
+      if (!(e instanceof KernelError)) {
+        // Total by construction: a handler that trips over a malformed field (a missing payload, a non-string
+        // role, a BigInt() of junk) rejects the instruction like any other. Letting it throw out of executeBlock
+        // left the height and clock already advanced but the block unlogged, so the ledger and its own log
+        // disagreed from then on - and any unauthenticated caller could cause it. Counted, never hidden.
+        this.counters.internalErrors = (this.counters.internalErrors || 0) + 1;
+        e = new KernelError('MALFORMED', 'instruction could not be processed: a field has the wrong shape');
+      }
       this.counters.rejected[e.code] = (this.counters.rejected[e.code] || 0) + 1;
       return { instId: tx && tx.inst_id, type: tx && tx.type, ok: false, error: e.code, message: e.message, events: [], caller: this.#derived || (tx && tx.caller) || { kind: 'unspecified' } };
     }
