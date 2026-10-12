@@ -15,7 +15,14 @@
 | 4 | 2 consensus | `Network.verifyReceipt` never compared `header.chainId` with the genesis, so a receipt verified against another chain's genesis | [RAN] red test | chain-id check; tolerates missing sigs |
 | 5 | 3 authority | Institution-signed `caller` could be any object, including `{kind:'agent', grant_id, label}` = the exact shape the kernel stamps when it derives a caller from a grant (forged provenance), plus unbounded junk into log/queue | [RAN] 2 tests red | `CALLER_MISMATCH` unless `{kind, label?}` with length caps |
 
-Test count: 173 -> 207 (+34), all passing.
+| 6 | 4 docs | `01` section 8 listed five tranches (sum 274.8) against a 330.8 envelope; the CFO memo's sixth tranche T4 (56.2 standby) was missing | [VERIFIED] CFO memo section 2.3 table + its rounding line (sum 331.0) | 6a9768b added T4 to `01` |
+| 7 | 4 docs | G0 bank-count thresholds contradict: GO at 4+ banks (2 of top 3), NO-GO below 3, kill trigger K3 below 5 founding issuers, S4 says 2-3 banks, `01` 3.3 item 5 says "six signed commitments" | [VERIFIED] by reading `01` 3.3, `04` G0/K3/S4, `board/strategy-risk-challenge.md`, CFO K3 | flagged in `04` (no number chosen: BLOCKED on a board decision) |
+| 8 | 5 overclaims | ROADMAP 8.1 spec still said the reworded ISO text "says the block is final"; block view field `finalSigs`; "live dashboard" in package.json (not scanned); two test titles ("network is live", "finality receipts"); a receipt comment | [READ] + claims scan extended to package.json (red before) | 6b11fe6 |
+| 9 | 5 overclaims | `04` section 7 "Approved wording now" for legal finality cites a measurement nobody has made | [READ] | flagged in `04`, wording NOT changed |
+| 10 | 6 agent | An event-gated escrow's money could be TRANSFERred out of the reserved-id escrow account by the beneficiary's own bank with no oracle event (also REDEEM, PAYMENT in, DVP, FREEZE, sweeps, nested lock) | [RAN] on unmodified kernel: cedar +$1,000, escrow open at zero, invariants green | escrow accounts reserved (`ESCROW_ACCOUNT_RESERVED`), no state shape change |
+| 11 | 8 crypto | `canon()` dropped any `__proto__` member, so distinct documents shared one signed digest / block hash | [RAN] `canon(JSON.parse('{"a":1,"__proto__":{"b":2}}')) === canon({a:1})` | null-prototype objects in `norm()`; other canonical forms pinned unchanged |
+
+Test count: 173 -> 213 (+40), all passing.
 
 ## Deferred
 ## BLOCKED
