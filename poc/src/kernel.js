@@ -372,7 +372,8 @@ export class Ledger {
     const iss = this.#issuer(p.issuer);
     this.#sig(tx, `ops:${iss.id}`);
     need(typeof p.holderRef === 'string' && /^[a-z0-9_-]{1,40}$/.test(p.holderRef), 'BAD_HOLDER_REF');
-    need(Number.isInteger(p.kycExpires), 'BAD_KYC');
+    need(Number.isSafeInteger(p.kycExpires), 'BAD_KYC');
+    need(p.kycRef === undefined || (typeof p.kycRef === 'string' && p.kycRef.length <= 80), 'BAD_KYC', 'kycRef must be a string of at most 80 characters');
     const id = `${iss.id}:${p.holderRef}`;
     need(!this.s.accounts.has(id), 'ACCOUNT_EXISTS');
     j.set(this.s.accounts, id, { id, issuer: iss.id, holder: p.holderRef, balance: 0n, sec: new Map(), status: 'active', kycRef: String(p.kycRef || ''), kycExpires: p.kycExpires });
@@ -397,7 +398,7 @@ export class Ledger {
     this.#sig(tx, `ops:${iss.id}`);
     this.#sig(tx, 'anchor');
     const x = parseAmount(p.amount);
-    need(BigInt(p.A_after) === this.s.anchor.A + x, 'ANCHOR_MISMATCH', 'anchor attestation does not match funding amount');
+    need(parseNonNegAmount(p.A_after) === this.s.anchor.A + x, 'ANCHOR_MISMATCH', 'anchor attestation does not match funding amount');
     j.field(this.s.anchor, 'A', this.s.anchor.A + x);
     j.field(iss, 'sp', iss.sp + x);
     events.push({ type: 'SP_FUNDED', issuer: iss.id, amount: x.toString() });
@@ -410,7 +411,7 @@ export class Ledger {
     this.#sig(tx, 'anchor');
     const x = parseAmount(p.amount);
     need(iss.sp >= x, 'INSUFFICIENT_SETTLEMENT_POSITION');
-    need(BigInt(p.A_after) === this.s.anchor.A - x, 'ANCHOR_MISMATCH');
+    need(parseNonNegAmount(p.A_after) === this.s.anchor.A - x, 'ANCHOR_MISMATCH');
     j.field(this.s.anchor, 'A', this.s.anchor.A - x);
     j.field(iss, 'sp', iss.sp - x);
     events.push({ type: 'SP_DEFUNDED', issuer: iss.id, amount: x.toString() });
@@ -425,9 +426,10 @@ export class Ledger {
     need(iss.status === 'ACTIVE', 'ISSUER_QUARANTINED');
     const x = parseAmount(p.amount);
     this.#cap(x);
+    need(typeof p.holdId === 'string' && p.holdId.length >= 1 && p.holdId.length <= 64, 'BAD_HOLD_ID');
     need(!iss.holds.has(p.holdId), 'HOLD_EXISTS');
-    need(Number.isInteger(p.seq) && p.seq > iss.seq, 'STALE_ATTESTATION');
-    need(BigInt(p.L_after) === iss.L + x, 'ATTESTATION_MISMATCH', 'L_after must equal previous L plus the hold');
+    need(Number.isSafeInteger(p.seq) && p.seq > iss.seq, 'STALE_ATTESTATION');
+    need(parseNonNegAmount(p.L_after) === iss.L + x, 'ATTESTATION_MISMATCH', 'L_after must equal previous L plus the hold');
     j.field(iss, 'L', iss.L + x);
     j.field(iss, 'seq', p.seq);
     j.set(iss.holds, p.holdId, { amount: x, since: time });
@@ -440,8 +442,8 @@ export class Ledger {
     this.#sig(tx, `attest:${iss.id}`);
     const h = iss.holds.get(p.holdId);
     need(h, 'UNKNOWN_HOLD');
-    need(Number.isInteger(p.seq) && p.seq > iss.seq, 'STALE_ATTESTATION');
-    need(BigInt(p.L_after) === iss.L - h.amount, 'ATTESTATION_MISMATCH');
+    need(Number.isSafeInteger(p.seq) && p.seq > iss.seq, 'STALE_ATTESTATION');
+    need(parseNonNegAmount(p.L_after) === iss.L - h.amount, 'ATTESTATION_MISMATCH');
     j.field(iss, 'L', iss.L - h.amount);
     j.field(iss, 'seq', p.seq);
     j.del(iss.holds, p.holdId);
@@ -486,8 +488,8 @@ export class Ledger {
     this.#sig(tx, `attest:${iss.id}`);
     const e = iss[mapName].get(p.id);
     need(e, 'UNKNOWN_PENDING');
-    need(Number.isInteger(p.seq) && p.seq > iss.seq, 'STALE_ATTESTATION');
-    need(BigInt(p.L_after) === iss.L + sign * e.amount, 'ATTESTATION_MISMATCH', 'L_after inconsistent with pending amount');
+    need(Number.isSafeInteger(p.seq) && p.seq > iss.seq, 'STALE_ATTESTATION');
+    need(parseNonNegAmount(p.L_after) === iss.L + sign * e.amount, 'ATTESTATION_MISMATCH', 'L_after inconsistent with pending amount');
     j.field(iss, 'L', iss.L + sign * e.amount);
     j.field(iss, 'seq', p.seq);
     j.del(iss[mapName], p.id);
@@ -509,7 +511,7 @@ export class Ledger {
     const p = tx.payload;
     const iss = this.#issuer(p.issuer);
     this.#sig(tx, `attest:${iss.id}`);
-    need(Number.isInteger(p.seq), 'BAD_SEQ');
+    need(Number.isSafeInteger(p.seq), 'BAD_SEQ');
     if (p.seq < iss.seq) {
       if (iss.status === 'ACTIVE') {
         j.field(iss, 'status', 'QUARANTINED');
@@ -518,9 +520,10 @@ export class Ledger {
       events.push({ type: 'CORE_LAG_DETECTED', issuer: iss.id });
       return;
     }
-    j.field(iss, 'L', BigInt(p.L));
+    const L = parseNonNegAmount(p.L);
+    j.field(iss, 'L', L);
     j.field(iss, 'seq', p.seq);
-    events.push({ type: 'ATTESTED', issuer: iss.id, L: String(p.L) });
+    events.push({ type: 'ATTESTED', issuer: iss.id, L: L.toString() });
   }
 
   // Anyone holding a registered reconciler key can pull the fire alarm; restarting is expensive.
@@ -576,6 +579,7 @@ export class Ledger {
     this.#cap(x);
     const A = this.#issuer(from.issuer);
     need(A.status === 'ACTIVE', 'ISSUER_QUARANTINED', `${A.id} is quarantined`);
+    need(p.queueIfShort === undefined || p.queueIfShort === null || typeof p.queueIfShort === 'boolean', 'MALFORMED', 'queueIfShort must be a boolean');
     if (A.sp < x && p.queueIfShort) {
       // A queued payment is settled later by NET_CYCLE, which re-verifies the institution's own signatures on the
       // stored copy. An agent-authorised payment has none, so it would be charged to the grant and then never
@@ -624,7 +628,7 @@ export class Ledger {
     const to = this.#user(p.to);
     need(typeof p.escrowId === 'string' && ID_RE.test(p.escrowId), 'BAD_ESCROW_ID');
     need(!this.s.escrows.has(p.escrowId), 'ESCROW_EXISTS');
-    need(Number.isInteger(p.expiresAt) && p.expiresAt > time, 'BAD_EXPIRY');
+    need(Number.isSafeInteger(p.expiresAt) && p.expiresAt > time, 'BAD_EXPIRY');
     const releaseRole = p.releaseRole || `ops:${from.issuer}`;
     need(this.#pubFor(releaseRole) !== undefined, 'BAD_RELEASE_ROLE');
     const eventName = p.eventName === undefined ? null : p.eventName;
@@ -794,9 +798,9 @@ export class Ledger {
     need(p.label === undefined || (typeof p.label === 'string' && p.label.length <= 80), 'BAD_GRANT_LABEL');
     need(Array.isArray(p.allow_types) && p.allow_types.length > 0 && p.allow_types.every((x) => typeof x === 'string'), 'GRANT_BAD_TYPES');
     need(p.allow_types.every((x) => GRANTABLE.has(x)), 'GRANT_TYPE_NOT_GRANTABLE', `grantable: ${GRANTABLE_TYPES.join(', ')}`);
-    need(p.per_instruction_max !== undefined && p.per_instruction_max !== null && p.window && p.window !== null && Number.isInteger(p.not_after) && p.not_after > time, 'GRANT_UNBOUNDED', 'per_instruction_max, window and a future not_after are all mandatory');
+    need(p.per_instruction_max !== undefined && p.per_instruction_max !== null && p.window && p.window !== null && Number.isSafeInteger(p.not_after) && p.not_after > time, 'GRANT_UNBOUNDED', 'per_instruction_max, window and a future not_after are all mandatory');
     const max = parseAmount(p.per_instruction_max, 'GRANT_BAD_AMOUNT');
-    need(Number.isInteger(p.window.seconds) && p.window.seconds >= 1 && p.window.seconds <= MAX_WINDOW_S, 'GRANT_BAD_WINDOW');
+    need(Number.isSafeInteger(p.window.seconds) && p.window.seconds >= 1 && p.window.seconds <= MAX_WINDOW_S, 'GRANT_BAD_WINDOW');
     const cap = parseAmount(p.window.max_total, 'GRANT_BAD_AMOUNT');
     const cps = p.counterparties === undefined || p.counterparties === null ? null : p.counterparties;
     need(cps === null || (Array.isArray(cps) && cps.length > 0 && cps.every((a) => typeof a === 'string' && ACCT_RE.test(a))), 'GRANT_BAD_COUNTERPARTIES');
@@ -941,7 +945,7 @@ export class Ledger {
   #checkEnvelope(tx, time, batchDigest = null) {
     need(tx && typeof tx === 'object' && typeof tx.type === 'string', 'MALFORMED');
     need(typeof tx.inst_id === 'string' && tx.inst_id.length >= 8 && tx.inst_id.length <= 64, 'BAD_INST_ID');
-    need(Number.isInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
+    need(Number.isSafeInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
     need(!this.s.dedup.has(tx.inst_id), 'DUPLICATE_INSTRUCTION');
     need(!tx.batch_digest || tx.batch_digest === batchDigest, 'BATCH_LEG_MISBOUND', 'this instruction was signed to ride only inside a specific batch, and this is not it');
     // A declared caller is self-attested metadata and may be {kind, label?} only. Anything else - above all the
@@ -1079,7 +1083,7 @@ export class Ledger {
   // end-of-block invariant hook. Every validator reaches the same verdict from the same state:
   // there is no vote to halt. A halt still commits the block, so observers stay in sync.
   executeBlock({ txs, time }) {
-    need(Number.isInteger(time) && time >= this.s.time, 'BAD_TIME');
+    need(Number.isSafeInteger(time) && time >= this.s.time, 'BAD_TIME');
     this.s.height += 1;
     this.s.time = time;
     for (const [k, t] of this.s.dedup) if (t < time - DEDUP_WINDOW_S) this.s.dedup.delete(k);
