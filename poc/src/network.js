@@ -373,9 +373,10 @@ export class Network {
 
   // A finality receipt is verifiable offline: header hash plus at least QUORUM validator signatures.
   static verifyReceipt(genesis, block) {
+    if (!block || !block.header || block.header.chainId !== genesis.chainId) return false; // a receipt proves its own chain only
     if (sha256(canon(block.header)) !== block.hash) return false;
     let n = 0;
-    for (const v of genesis.validators) if (block.sigs[v.id] && verify(v.pub, block.hash, block.sigs[v.id])) n++;
+    for (const v of genesis.validators) if (block.sigs && block.sigs[v.id] && verify(v.pub, block.hash, block.sigs[v.id])) n++;
     return n >= QUORUM;
   }
 
