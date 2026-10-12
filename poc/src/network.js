@@ -34,6 +34,7 @@ export const ERROR_CATALOG = {
   SWEEP_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that registered this sweep, or one of its ancestors, may cancel it. Ask the institution, or the registering grant itself, to cancel it.' },
   ESCROW_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that locked this escrow, or one of its ancestors, may refund it. Ask the institution, or the locking grant itself, to refund it.' },
   AGENT_QUEUE_UNSUPPORTED: { retryable: true, remedy: 'An agent-authorised PAYMENT cannot be queued for liquidity-saving netting yet. Retry with queueIfShort false (it will be refused while the settlement position is short), or once the payer issuer\'s position covers the amount, or ask the institution to submit it with its own signature.' },
+  ESCROW_ACCOUNT_RESERVED: { retryable: false, remedy: 'The account is an escrow holding account (<issuer>:escrow:<id>). Its money moves only through ESCROW_RELEASE, EVENT_RELEASE or ESCROW_REFUND for that escrow; address the beneficiary or payer account instead.' },
   BATCH_LEG_MISBOUND: { retryable: false, remedy: 'This instruction was signed with a batch_digest binding it to a specific set and order of legs. Submit it inside exactly that batch, unchanged, or re-sign it with a new inst_id and no batch_digest to run it standalone.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
 };

@@ -309,8 +309,16 @@ export class Ledger {
     need(a, 'UNKNOWN_ACCOUNT', `unknown account ${id}`);
     return a;
   }
-  #live(id, time) {
+  // Escrow accounts ("<issuer>:escrow:<id>", holder "escrow:<id>") are reserved: their money moves only by the
+  // escrow's own release/refund path. OPEN_ACCOUNT's holder-ref rule has no ':' so no customer account can look like
+  // one. Detected from the holder, not a new state field, so existing state roots do not change.
+  #user(id) {
     const a = this.#account(id);
+    need(!a.holder.startsWith('escrow:'), 'ESCROW_ACCOUNT_RESERVED', `${id} is an escrow account: its money moves only by release or refund`);
+    return a;
+  }
+  #live(id, time) {
+    const a = this.#user(id);
     need(a.status === 'active', 'ACCOUNT_FROZEN', `account ${id} is frozen`);
     need(a.kycExpires > time, 'KYC_EXPIRED', `KYC attestation for ${id} expired`);
     return a;
@@ -528,13 +536,13 @@ export class Ledger {
   }
 
   tx_FREEZE_ACCOUNT(tx, time, j, events) {
-    const a = this.#account(tx.payload.account);
+    const a = this.#user(tx.payload.account);
     this.#sig(tx, `ops:${a.issuer}`);
     j.field(a, 'status', 'frozen');
     events.push({ type: 'ACCOUNT_FROZEN', account: a.id });
   }
   tx_UNFREEZE_ACCOUNT(tx, time, j, events) {
-    const a = this.#account(tx.payload.account);
+    const a = this.#user(tx.payload.account);
     this.#sig(tx, `ops:${a.issuer}`);
     j.field(a, 'status', 'active');
     events.push({ type: 'ACCOUNT_UNFROZEN', account: a.id });
@@ -613,7 +621,7 @@ export class Ledger {
   tx_ESCROW_LOCK(tx, time, j, events) {
     const p = tx.payload;
     const from = this.#live(p.from, time);
-    const to = this.#account(p.to);
+    const to = this.#user(p.to);
     need(typeof p.escrowId === 'string' && ID_RE.test(p.escrowId), 'BAD_ESCROW_ID');
     need(!this.s.escrows.has(p.escrowId), 'ESCROW_EXISTS');
     need(Number.isInteger(p.expiresAt) && p.expiresAt > time, 'BAD_EXPIRY');
@@ -740,8 +748,8 @@ export class Ledger {
   // position or cross-issuer accept signature is ever in question.
   tx_REGISTER_SWEEP(tx, time, j, events) {
     const p = tx.payload;
-    const from = this.#account(p.from);
-    const to = this.#account(p.to);
+    const from = this.#user(p.from);
+    const to = this.#user(p.to);
     need(from.issuer === to.issuer, 'SWEEP_SAME_ISSUER_ONLY');
     need(from.id !== to.id, 'SELF_TRANSFER');
     this.#authorize(tx, from.issuer, { accounts: [from.id, to.id], time, j });
