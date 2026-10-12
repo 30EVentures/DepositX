@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DepositX Network proof of concept: par kernel, the full launch-set templates (Transfer, Convert, DvP, Escrow, PayOnEvent, Batch, Standing/Sweep), graded halt, self-updating dashboard (simulated network, not regulated, nothing final). No dependencies.",
+  "description": "DepositX Network proof of concept: par kernel, the full launch-set templates (Transfer, Convert, DvP, Escrow, PayOnEvent, Batch, Standing/Sweep), graded halt, self-updating dashboard of a simulated network (not regulated). No dependencies.",
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test test/*.test.js",

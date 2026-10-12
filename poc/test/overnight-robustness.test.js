@@ -6,7 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Network } from '../src/network.js';
 
-const TYPES = ['OPEN_ACCOUNT', 'CREDIT_SECURITY', 'FUND_SP', 'DEFUND_SP', 'OPEN_HOLD', 'RELEASE_HOLD', 'MINT', 'REDEEM', 'CLOSE_REDEMPTION', 'CLOSE_CONVERT_OUT', 'CLOSE_CONVERT_IN', 'ATTEST', 'REPORT_PAR_BREAK', 'FREEZE_ACCOUNT', 'UNFREEZE_ACCOUNT', 'TRANSFER', 'PAYMENT', 'DVP', 'ESCROW_LOCK', 'ESCROW_RELEASE', 'EVENT_RELEASE', 'ESCROW_REFUND', 'BATCH', 'REGISTER_SWEEP', 'CANCEL_SWEEP', 'GRANT', 'REVOKE_GRANT', 'NET_CYCLE', 'RESUME'];
+import { Ledger } from '../src/kernel.js';
+// every handler the kernel has, so a new instruction type is covered without editing this list
+const TYPES = Object.getOwnPropertyNames(Ledger.prototype).filter((k) => k.startsWith('tx_')).map((k) => k.slice(3));
 const BAD_PAYLOADS = [undefined, null, 'x', 42, [], true];
 
 // the ledger and its log must stay in step, and a replay from genesis must still reproduce the live head

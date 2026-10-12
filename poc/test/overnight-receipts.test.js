@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Network, dollars } from '../src/network.js';
-import { canon, sha256 } from '../src/crypto.js';
+import { canon, sha256, sign } from '../src/crypto.js';
 
 test('a receipt for one chain id does not verify against another chain\'s genesis, even with the same validators', () => {
   const n = new Network();
@@ -16,11 +16,15 @@ test('a receipt for one chain id does not verify against another chain\'s genesi
   assert.equal(Network.verifyReceipt(other, block), false);
 });
 
-test('a receipt whose header names a different chain than the genesis is refused even if re-hashed consistently', () => {
+test('a header for another chain that the real validators signed is refused too', () => {
   const n = new Network();
   n.pay('MPL:acme', 'MPL:harbour', dollars(1));
   const block = n.blocks[n.blocks.length - 1];
   const header = { ...block.header, chainId: 'forged' };
-  const forged = { ...block, header, hash: sha256(canon(header)) }; // validator signatures no longer match the new hash
+  const hash = sha256(canon(header));
+  // re-signed by the genuine validator keys, so the hash and signatures are internally consistent: only the chain id is wrong
+  const sigs = Object.fromEntries(Object.entries(n.K.validators).map(([id, k]) => [id, sign(k.priv, hash)]));
+  const forged = { ...block, header, hash, sigs };
+  assert.equal(Network.verifyReceipt({ ...n.genesis, chainId: 'forged' }, forged), true, 'control: consistent with a genesis that names that chain');
   assert.equal(Network.verifyReceipt(n.genesis, forged), false);
 });

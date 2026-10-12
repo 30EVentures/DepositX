@@ -34,6 +34,7 @@ const parseNonNegAmount = (s, code = 'BAD_AMOUNT') => {
   need(typeof s === 'string' && /^(0|[1-9][0-9]{0,17})$/.test(s), code, `amount must be a non-negative integer string of cents, got ${s}`);
   return BigInt(s);
 };
+const ISSUER_KEY_KINDS = ['ops', 'mint', 'attest', 'screen', 'accept'];
 const ID_RE = /^[a-z0-9_-]{1,40}$/;
 
 export const MAX_TTL_S = 60; // valid_until must be within 60 s of block time
@@ -88,6 +89,19 @@ class Journal {
   }
 }
 
+export const MAX_TX_DEPTH = 24; // a BATCH leg's payload sits about 5 levels down; real instructions need far less
+// Iterative, so a hostile 100,000-level document cannot overflow the stack here.
+const withinDepth = (root, max) => {
+  const stack = [[root, 0]];
+  while (stack.length) {
+    const [v, d] = stack.pop();
+    if (v && typeof v === 'object') {
+      if (d >= max) return false;
+      for (const k of Object.keys(v)) stack.push([v[k], d + 1]);
+    }
+  }
+  return true;
+};
 const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
@@ -195,6 +209,7 @@ export class Ledger {
       const gr = this.s.grants.get(who);
       return gr ? gr.agentKey : undefined;
     }
+    if (!ISSUER_KEY_KINDS.includes(kind)) return undefined;
     const i = this.s.issuers.get(who);
     return i ? i.keys[kind === 'accept' ? 'ops' : kind] : undefined; // ops | mint | attest | screen; accept = payee issuer's ops key
   }
@@ -295,7 +310,10 @@ export class Ledger {
   // else nothing (omitted, so state roots of chains that never used callers are unchanged).
   #effectiveCaller(tx) {
     if (this.#derived) return { caller: this.#derived };
-    return tx.caller && tx.caller.kind !== 'unspecified' ? { caller: tx.caller } : {};
+    // omit only the exact default {kind:'unspecified'} (its digest is the same as no caller); any other declared
+    // caller, including {kind:'unspecified', label}, must be stored as signed or the stored copy no longer verifies
+    const c = tx.caller;
+    return c && !(c.kind === 'unspecified' && Object.keys(c).length === 1) ? { caller: c } : {};
   }
 
   // ---------------------------------------------------------------- helpers
@@ -386,7 +404,7 @@ export class Ledger {
     this.#sig(tx, 'gov:neutral');
     const p = tx.payload;
     need(this.s.securities.has(p.secId), 'UNKNOWN_SECURITY');
-    const a = this.#account(p.account);
+    const a = this.#user(p.account);
     const q = parseAmount(p.qty, 'BAD_QTY');
     j.set(a.sec, p.secId, (a.sec.get(p.secId) || 0n) + q);
     events.push({ type: 'SECURITY_CREDITED', account: a.id, secId: p.secId, qty: q.toString() });
@@ -1084,6 +1102,11 @@ export class Ledger {
   // there is no vote to halt. A halt still commits the block, so observers stay in sync.
   executeBlock({ txs, time }) {
     need(Number.isSafeInteger(time) && time >= this.s.time, 'BAD_TIME');
+    // Everything that can throw on a hostile input happens BEFORE the first mutation: a block the kernel refuses
+    // leaves height, time and dedup untouched, so the ledger and its log cannot drift apart. Nesting is bounded
+    // because canon() (txRoot here, stateRoot later, and the queue stores whole payloads) recurses.
+    need(Array.isArray(txs) && txs.every((tx) => withinDepth(tx, MAX_TX_DEPTH)), 'MALFORMED', `an instruction is nested more than ${MAX_TX_DEPTH} levels deep`);
+    const txRoot = sha256(canon(txs));
     this.s.height += 1;
     this.s.time = time;
     for (const [k, t] of this.s.dedup) if (t < time - DEDUP_WINDOW_S) this.s.dedup.delete(k);
@@ -1094,7 +1117,7 @@ export class Ledger {
       height: this.s.height,
       time,
       prev: this.s.prev,
-      txRoot: sha256(canon(txs)),
+      txRoot,
       stateRoot: this.stateRoot(),
       halt: this.s.halt ? { reason: this.s.halt.reason, issuer: this.s.halt.issuer } : null,
     };
