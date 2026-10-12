@@ -180,12 +180,17 @@ export class Ledger {
   // ---------------------------------------------------------------- keys & signatures
   #pubFor(role) {
     const g = this.genesis;
-    const [kind, who] = role.split(':');
-    if (kind === 'gov') return g.governance[who];
+    if (typeof role !== 'string') return undefined;
+    const parts = role.split(':');
+    if (parts.length > 2) return undefined; // 'agent:p1:zz' is not grant p1 (the chain lookup uses the whole remainder)
+    const [kind, who] = parts;
+    // own properties only: names every object inherits (constructor, toString, __proto__) are not keys
+    const own = (o) => (o && Object.hasOwn(o, who) ? o[who] : undefined);
+    if (kind === 'gov') return own(g.governance);
     if (kind === 'observer') return g.observer;
     if (kind === 'anchor') return g.anchor;
-    if (kind === 'reconciler') return g.reconcilers[who];
-    if (kind === 'event') return g.eventOracles ? g.eventOracles[who] : undefined; // named oracle key, e.g. PayOnEvent's "delivery"
+    if (kind === 'reconciler') return own(g.reconcilers);
+    if (kind === 'event') return own(g.eventOracles); // named oracle key, e.g. PayOnEvent's "delivery"
     if (kind === 'agent') {
       const gr = this.s.grants.get(who);
       return gr ? gr.agentKey : undefined;
