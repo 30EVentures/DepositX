@@ -936,6 +936,15 @@ export class Ledger {
     need(Number.isInteger(tx.valid_until) && tx.valid_until >= time && tx.valid_until <= time + MAX_TTL_S, 'BAD_VALIDITY', 'valid_until must be within 60 s of block time');
     need(!this.s.dedup.has(tx.inst_id), 'DUPLICATE_INSTRUCTION');
     need(!tx.batch_digest || tx.batch_digest === batchDigest, 'BATCH_LEG_MISBOUND', 'this instruction was signed to ride only inside a specific batch, and this is not it');
+    // A declared caller is self-attested metadata and may be {kind, label?} only. Anything else - above all the
+    // grant_id the kernel itself stamps on an instruction it derived from a grant - would let an institution-signed
+    // instruction forge a derived attribution, and would let unbounded junk into the log and the stored queue.
+    if (tx.caller != null) {
+      const c = tx.caller;
+      const shaped = typeof c === 'object' && !Array.isArray(c) && Object.keys(c).every((k) => k === 'kind' || k === 'label')
+        && typeof c.kind === 'string' && c.kind.length >= 1 && c.kind.length <= 20 && (c.label === undefined || (typeof c.label === 'string' && c.label.length <= 80));
+      need(shaped, 'CALLER_MISMATCH', 'a declared caller is {kind, label?} only (kind up to 20 characters, label up to 80)');
+    }
     const h = this['tx_' + tx.type];
     need(typeof h === 'function' && !tx.type.startsWith('_'), 'UNKNOWN_TYPE');
     if (this.s.halt) need(['RESUME', 'ATTEST', 'REPORT_PAR_BREAK'].includes(tx.type), 'NETWORK_HALTED', `network halted: ${this.s.halt.reason}`);

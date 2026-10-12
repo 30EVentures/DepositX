@@ -20,7 +20,7 @@ export const ERROR_CATALOG = {
   GRANT_WIDENS_PARENT: { retryable: false, remedy: 'A sub-grant may only narrow its parent: types, per-instruction max, window cap, counterparties and expiry must all be within the parent.' },
   GRANT_WRONG_ISSUER: { retryable: false, remedy: 'A grant only authorises the issuer that created it.' },
   UNKNOWN_GRANT: { retryable: false, remedy: 'No grant with that id is on the ledger (check GET /api/grants).' },
-  CALLER_MISMATCH: { retryable: false, remedy: 'An agent-signed instruction cannot declare caller.kind human; omit caller or declare agent.' },
+  CALLER_MISMATCH: { retryable: false, remedy: 'A declared caller is {kind, label?} only (no other fields; the kernel stamps grant_id itself), and an agent-signed instruction cannot declare caller.kind human. Omit caller or declare it in that shape.' },
   BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it.' },
   MISSING_SIGNATURE: { retryable: false, remedy: 'A required role signature is absent. See GET /api/schema for the roles this type needs.' },
   DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already processed: the original outcome stands. Do not resend; use a new inst_id for a new instruction.' },
