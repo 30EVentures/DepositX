@@ -181,13 +181,13 @@ Option A, mandatory, as sketched in section 4.
   that still names a grant gets `GRANT_MISMATCH`; a fully stripped one still gets `MISSING_SIGNATURE`). The
   same-holder-splice pin now accepts `GRANT_MISMATCH` as well as `MISSING_SIGNATURE`, as it already did for
   `BAD_SIGNATURE`. The policy-guard adapter needed no change (it signs through `Network.tx()`, which binds).
-- Model checker: 24 delegation actions, oracle clause S6(f), one new planted bug; see
+- Model checker: 25 delegation actions (including a relabel-and-re-declare attack), oracle clause S6(f), one new planted bug; see
   `invariant-charter.md`, "Roadmap 8.5", for the numbers.
 
 | Measure | Result |
 |---|---|
-| Full suite (`npm test`) | 182/182 |
-| Delegation model, exhaustive | 12,478 states, 299,472 transitions, depth 16, 0 failures, 215.8 s |
+| Full suite (`npm test`) | 184/184 |
+| Delegation model, exhaustive | 12,478 states, 311,950 transitions, depth 16, 0 failures, 235.6 s |
 | Base model, `Date.now` pinned | depth 5: 3,793 / 40,680; depth 6: 13,442 / 151,720; unchanged |
 
 The earlier estimate for the throwaway copy was 175/177 with two explained failures; the real change needed the
@@ -196,4 +196,22 @@ same two test edits and the numbers above supersede that estimate.
 Still open: whether a real store needs an activation height or domain-tag bump (not needed here, there is no
 deployed chain); option B (refuse reuse of an agent key) was not built and is not needed for the property; the
 two helper soft spots in section 7 are untouched; the AIP content-hash `parent` (option C) is an export concern.
+
+### 9.1 Review follow-up (independent review, 2026-10-12)
+
+An independent reviewer found no path that still lets signed bytes move onto another grant, and three smaller things,
+all fixed:
+
+1. **Model gap.** The model's relabel attack never also re-declared `grant`, so removing `grant` from the signed digest
+   alone went undetected by the search. A second attack action does that now (checked on a throwaway copy: it is
+   accepted there and the model check goes red).
+2. **Stale digest cache.** The cached digest of a mutated instruction object was reused. Executed instructions are now
+   deep-frozen (see the charter, "Frozen once executed"); a variant is a copy with its own digest. The statement in
+   section 4 that changing `grant` "breaks the signature" holds for a fresh or copied instruction.
+3. **Junk agent keys.** Any `agent:*` key in `sigs` now demands a matching `grant` even where the handler ignores it,
+   so a relayer can get an institution-signed instruction refused by adding one; the clean instruction still runs.
+   Pinned by a test and written up in the charter.
+
+Not fixed, pre-existing and unrelated: an `ESCROW_LOCK` whose `releaseRole` is `agent:p1:zz` is accepted but can never
+be released (it fails closed).
 

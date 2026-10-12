@@ -289,26 +289,38 @@ unaffected. `Network.tx()` binds automatically when exactly one `agent:` role is
 `agentTx`, `grantTx` and `revokeGrant` change nothing; an external agent that builds instructions by hand must set `grant`
 (`GET /api/schema` and the error catalogue say so).
 
+**Frozen once executed (found by an independent review, 2026-10-12).** The signed digest is cached per instruction
+object, so a mutated object used to be checked against the digest of its earlier self: after a refusal, moving the
+signature to another grant and setting `grant` on the same object was accepted. (A mutated `payload` behaved the same
+before this change.) Only in-process callers could do it; a submission over HTTP is a fresh object. `executeBlock`
+now deep-freezes every instruction it executes, so the mutation throws a `TypeError` instead, and a variant must be
+a copy (`structuredClone`), which gets its own digest and fails `BAD_SIGNATURE`. One consequence: any `agent:*` key in
+`sigs` now demands a matching `grant`, even on an instruction whose handler ignores agent signatures. `sigs` is
+outside the digest, so a relayer can add such a key to an institution-signed instruction and have it refused
+(`GRANT_MISMATCH`); the clean instruction is unaffected, because a refused instruction is not deduplicated.
+
 **Cost, stated plainly.** Mandatory binding changes what a valid agent-signed instruction is, so a stored chain
 holding agent-signed instructions made before this change would fail replay. The same was true of earlier
 additions to the digest (`caller`, `batch_digest`). This proof of concept has no deployed chain, so no activation
 height was added; any real store would need one or a domain-tag bump. The change also touches the `#authorize` /
 envelope region that the unmerged hardening-x1 branch edits, so that branch will conflict when rebased.
 
-**Model-check coverage.** The delegation alphabet goes from 21 to 24 actions: a second root grant `g4` that shares
-`g1`'s key and is broader ($10 / $10), a legitimate `g4` transfer, and the attack "relabel a signed g1 $3 transfer
-(which needs the institution's signature) onto g4", which must always be refused and inert. The S6 oracle gains
+**Model-check coverage.** The delegation alphabet goes from 21 to 25 actions: a second root grant `g4` that shares
+`g1`'s key and is broader ($10 / $10), a legitimate `g4` transfer, and two attacks that must always be refused and
+inert: "relabel a signed g1 $3 transfer (which needs the institution's signature) onto g4", and the same relabel
+that also re-declares `grant` as g4 (it passes only if `grant` is missing from the signed digest). The S6 oracle gains
 clause (f): an accepted agent-signed instruction's signed `grant` equals the grant of its agent role. One new
 planted bug (a kernel that rewrites the declared grant to match the role label after the digest is computed, so
 the relabel passes) is caught, in a four-step counterexample (mint, mint, grant g4, then the attack),
 by the attack being accepted. Clause (f) reads the instruction's own `grant` field, so it cannot catch a bug
-that rewrites that field; the attack action is what catches that one. Because the search is exhaustive over the
+that rewrites that field; the attack action is what catches that one. The bug "`grant` is not in the digest" cannot be planted from the test without editing the kernel; it was checked by
+hand on a throwaway copy, where the re-declare attack is accepted and the model check goes red. Because the search is exhaustive over the
 alphabet and not over key reuse in general, it covers the shared key of g1 and g4 and nothing more.
 
 | Run | Actions | Depth | States | Transitions | Time | Failures |
 |---|---|---|---|---|---|---|
-| Delegation model, routine (`modelcheck.test.js`) | 24 | 9 | 5,575 | 87,576 | ~66 s (whole file ~123 s) | 0 |
-| Delegation model, one-off (`node src/modelcheck.js 20 delegation`) | 24 | 16 | **12,478, exhausted** | 299,472 | 215.8 s | 0 |
+| Delegation model, routine (`modelcheck.test.js`) | 25 | 9 | 5,575 | 91,225 | ~66 s (whole file ~123 s) | 0 |
+| Delegation model, one-off (`node src/modelcheck.js 20 delegation`) | 25 | 16 | **12,478, exhausted** | 311,950 | 235.6 s | 0 |
 | Base model, `Date.now` pinned, depth 5 / 6 | unchanged | 5 / 6 | 3,793 / 13,442 | 40,680 / 151,720 | n/a | 0 |
 
 The base-model counts are identical to those before the change (the base alphabet builds no agent instruction),

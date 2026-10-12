@@ -138,14 +138,14 @@ withMutant('payments ignore the settlement position: the payer can spend money i
 
 // ---------------------------------------------------------------------------------------------
 // Roadmap 6.3: delegation soundness (S6). Grants gate authority (P6), so unlike caller attribution
-// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (24 actions,
+// they must be searched exhaustively. Run on the focused DELEGATION_MODEL alphabet (25 actions,
 // extended from 19 by roadmap 8.3's CANCEL_SWEEP-ownership actions, and from 21 by 8.5's grant-binding actions: a second
 // root grant g4 sharing g1's key, a legitimate g4 transfer, and the relabel attack) so the search can go deep: a
 // counterexample needs mint, mint, grant, sub-grant, revoke, use.
 test('model check S6: every state reachable within 9 delegation actions keeps every grant inside its parent, honours revocation through the whole chain, never lets an agent past its envelope without the institution, and never lets a grant cancel a sweep it did not register, and never lets signed bytes move onto another grant that shares the signer key', () => {
   const r = modelCheck({ maxDepth: 9, maxStates: 8000, actions: DELEGATION_MODEL });
   assert.deepEqual(r.failures, []);
-  assert.equal(r.actions, 24);
+  assert.equal(r.actions, 25);
   assert.equal(r.capped, false);
   assert.ok(r.states > 3000, `explored ${r.states} states`);
   assert.ok(r.transitions > 60000, `explored ${r.transitions} transitions`);
@@ -193,14 +193,13 @@ withDelegationMutant('narrowing compares money as strings ("1000" <= "200"), so 
     const p = tx.payload;
     const par = p.parent && this.s.grants.get(p.parent);
     if (!par) return orig.call(this, tx, time, j, events);
-    messageOf(tx, this.chainId); // cache the signed digest before the payload is touched
+    // the kernel freezes executed instructions, so the planted bug works on an unfrozen copy whose signed digest is cached first
+    const q = { ...p };
+    const copy = { ...tx, payload: q };
+    messageOf(copy, this.chainId); // cache the signed digest before the payload is touched
     const real = { max: p.per_instruction_max };
-    if (real.max <= par.per_instruction_max.toString()) p.per_instruction_max = par.per_instruction_max.toString(); // bug: lexicographic compare
-    try {
-      orig.call(this, tx, time, j, events);
-    } finally {
-      p.per_instruction_max = real.max;
-    }
+    if (real.max <= par.per_instruction_max.toString()) q.per_instruction_max = par.per_instruction_max.toString(); // bug: lexicographic compare
+    orig.call(this, copy, time, j, events);
     const rec = this.s.grants.get(p.grant_id);
     j.set(this.s.grants, p.grant_id, { ...rec, per_instruction_max: BigInt(real.max) });
   };

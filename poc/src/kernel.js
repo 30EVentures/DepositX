@@ -102,6 +102,17 @@ const withinDepth = (root, max) => {
   }
   return true;
 };
+// The signed digest is cached per tx OBJECT, so an object must not change once the kernel has seen it: otherwise a
+// mutated tx (a relabelled signature, a re-declared `grant`) would be checked against the digest of its earlier
+// self. executeBlock therefore freezes every instruction it executes (deeply, legs included); a caller that wants a
+// variant takes a copy (structuredClone) and gets its own digest. HTTP submissions are fresh objects anyway.
+const deepFreeze = (v) => {
+  if (v && typeof v === 'object' && !Object.isFrozen(v)) {
+    Object.freeze(v);
+    for (const k of Object.keys(v)) deepFreeze(v[k]);
+  }
+  return v;
+};
 const msgCache = new WeakMap();
 export function messageOf(tx, chainId) {
   let m = msgCache.get(tx);
@@ -1118,6 +1129,7 @@ export class Ledger {
     // because canon() (txRoot here, stateRoot later, and the queue stores whole payloads) recurses.
     need(Array.isArray(txs) && txs.every((tx) => withinDepth(tx, MAX_TX_DEPTH)), 'MALFORMED', `an instruction is nested more than ${MAX_TX_DEPTH} levels deep`);
     const txRoot = sha256(canon(txs));
+    for (const tx of txs) deepFreeze(tx);
     this.s.height += 1;
     this.s.time = time;
     for (const [k, t] of this.s.dedup) if (t < time - DEDUP_WINDOW_S) this.s.dedup.delete(k);

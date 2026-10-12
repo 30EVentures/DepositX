@@ -44,10 +44,12 @@ test('ATTACK: an agent-signed instruction cannot be moved onto a different grant
   // The same signed bytes, relabelled to the broad grant by a relayer. ONLY the agent signature is relabelled:
   // every other signature (screen:MPL) is kept, so a refusal can only come from grant binding, not from this
   // test having broken the instruction (an earlier draft replaced the whole sigs object and passed vacuously).
-  const { 'agent:p1': agentSig, ...others } = t.sigs;
-  t.sigs = { ...others, 'agent:p2': agentSig };
-  assert.deepEqual(Object.keys(t.sigs).sort(), ['agent:p2', 'screen:MPL'], 'the relabelled instruction is otherwise complete');
-  const r = one(n, t);
+  // The kernel freezes an instruction it has executed, so the relabelled variant is a copy with its own digest.
+  const v = structuredClone(t);
+  const { 'agent:p1': agentSig, ...others } = v.sigs;
+  v.sigs = { ...others, 'agent:p2': agentSig };
+  assert.deepEqual(Object.keys(v.sigs).sort(), ['agent:p2', 'screen:MPL'], 'the relabelled instruction is otherwise complete');
+  const r = one(n, v);
   assert.equal(r.ok, false, `SPLICED: the instruction signed under p1 was accepted under p2 (recorded caller ${JSON.stringify(r.caller)})`);
   assert.equal(acme(n), before, 'no money moved');
   assert.equal(n.ledger.s.grants.get('p2').win.spent, 0n, "p2's window was not charged");
@@ -151,3 +153,35 @@ test('BOUND: a sub-grant and a revocation by an ancestor name their signing gran
   assert.equal(one(n, rv).error, 'GRANT_MISMATCH');
   assert.ok(n.revokeGrant('c9', { by: 'p1' }).ok);
 });
+
+test('BOUND: an instruction the kernel has executed is frozen, so a mutated resubmission cannot reuse its cached digest', () => {
+  const n = new Network();
+  sharedKeyGrants(n);
+  const t = over(n);
+  assert.equal(one(n, t).error, 'ESCALATION_REQUIRED');
+  assert.ok(Object.isFrozen(t) && Object.isFrozen(t.sigs) && Object.isFrozen(t.payload), 'frozen once executed');
+  // Mutating the same object (relabel and re-declare) is refused loudly instead of being checked against a stale digest...
+  assert.throws(() => { t.grant = 'p2'; }, TypeError);
+  assert.throws(() => { t.sigs['agent:p2'] = t.sigs['agent:p1']; }, TypeError);
+  // ...and the same edit on a copy is a new instruction with its own digest, so the old signature no longer verifies.
+  const v = structuredClone(t);
+  v.sigs['agent:p2'] = v.sigs['agent:p1'];
+  delete v.sigs['agent:p1'];
+  v.grant = 'p2';
+  assert.equal(one(n, v).error, 'BAD_SIGNATURE');
+  assert.equal(n.ledger.s.grants.get('p2').win.spent, 0n);
+});
+
+test('BOUND: any agent:* signature key demands a matching grant, even when the handler would ignore it', () => {
+  // Behaviour change from the binding: sigs is outside the digest, so a relayer can add a junk agent:* key to an
+  // institution-signed instruction. That is now refused (GRANT_MISMATCH); the clean instruction is unaffected.
+  const n = new Network();
+  sharedKeyGrants(n);
+  const mk = () => n.tx('TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(5).toString() }, ['ops:MPL', 'screen:MPL']);
+  const clean = mk();
+  const junk = structuredClone(clean);
+  junk.sigs['agent:zz'] = clean.sigs['ops:MPL'];
+  assert.equal(one(n, junk).error, 'GRANT_MISMATCH');
+  assert.ok(one(n, clean).ok, 'a refused variant does not burn the clean instruction');
+});
+

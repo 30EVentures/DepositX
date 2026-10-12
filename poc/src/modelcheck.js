@@ -123,6 +123,13 @@ export const DELEGATION_ACTIONS = [
     t.sigs = { ...others, 'agent:g4': sig };
     return net.submitSigned(t);
   } },
+  { name: 'ATTACK relabel a signed g1 $3 transfer onto g4 AND re-declare its grant as g4', kind: 'attack', run: (net) => {
+    const t = net.agentTx('g1', 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(3).toString() }, ['screen:MPL']);
+    const { 'agent:g1': sig, ...others } = t.sigs;
+    t.sigs = { ...others, 'agent:g4': sig };
+    t.grant = 'g4'; // the declared grant is signed, so this only passes if `grant` is missing from the digest
+    return net.submitSigned(t);
+  } },
   { name: 'ATTACK sub-grant g3 under g1 widening max to $10', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER'], perInstructionMax: dollars(10) }) },
   { name: 'ATTACK sub-grant g3 under g1 adding ESCROW_LOCK', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER', 'ESCROW_LOCK'] }) },
 ];
