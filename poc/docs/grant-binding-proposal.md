@@ -1,7 +1,7 @@
 # Proposal: bind the grant an agent signs under (same-holder splice), and a money check on GRANT
 
-Status: **IMPLEMENTED 2026-10-12 as Option A, mandatory** (on branch `dx7-counsel-and-grant-binding`, local, not
-pushed, not merged), on Caleb's instruction "implement the grant-binding fix, mandatory". Sections 1 to 3 are the
+Status: **IMPLEMENTED 2026-10-12 as Option A, mandatory** (on branch `grant-binding-mandatory`, not merged), on the
+project owner's instruction to implement the fix and make it mandatory. Sections 1 to 3 are the
 original finding and are left as written; section 9 records what was built and measured. The test file
 `test/grant-binding.test.js` was red by exactly one test before the fix and is green now. Follows
 `agent-native-access-proposal.md`; the open items X3 and X4 there are separate.
