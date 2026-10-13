@@ -110,6 +110,11 @@ http
         if (iss && !['MPL', 'NSR', 'LKS'].includes(iss)) return json(res, 400, { ok: false, error: 'BAD_REQUEST', message: 'bad issuer' });
         return json(res, 200, net.grantsView(iss || undefined));
       }
+      if (req.method === 'GET' && url.pathname.startsWith('/api/instruction/')) {
+        let id = '';
+        try { id = decodeURIComponent(url.pathname.slice('/api/instruction/'.length)); } catch { /* not a valid escape: an id that cannot match */ }
+        return json(res, 200, net.outcome(id));
+      }
       if (req.method === 'GET' && url.pathname === '/api/verify') return json(res, 200, net.verifyReplay());
       if (req.method === 'GET' && url.pathname === '/api/bench') return json(res, 200, bench({ n: 20000 }));
       if (req.method === 'GET' && url.pathname === '/events') {

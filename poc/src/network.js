@@ -23,7 +23,7 @@ export const ERROR_CATALOG = {
   CALLER_MISMATCH: { retryable: false, remedy: 'A declared caller is {kind, label?} only (no other fields; the kernel stamps grant_id itself), and an agent-signed instruction cannot declare caller.kind human. Omit caller or declare it in that shape.' },
   BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it. An agent:<grant_id> signature for a grant that does not exist gets this same answer, so check the grant id and key against GET /api/grants.' },
   MISSING_SIGNATURE: { retryable: false, remedy: 'A required role signature is absent. See GET /api/schema for the roles this type needs.' },
-  DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already processed: the original outcome stands. Do not resend; use a new inst_id for a new instruction.' },
+  DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already accepted: the original outcome stands and is returned in `original` ({ok, height, hash}); GET /api/instruction/<inst_id> gives it again. Do not resend; use a new inst_id for a new instruction.' },
   BAD_VALIDITY: { retryable: true, remedy: 'valid_until must be within 60 seconds of block time. Re-sign with a fresh valid_until and a NEW inst_id.' },
   INSUFFICIENT_FUNDS: { retryable: true, remedy: 'The payer balance is below the amount. Retry after funds arrive, with a new inst_id.' },
   INSUFFICIENT_SETTLEMENT_POSITION: { retryable: true, remedy: 'The issuer settlement position is short. Retry later, or set queueIfShort to wait for netting.' },
@@ -120,6 +120,8 @@ export class Network {
     this.sanctioned = new Set(ISSUERS.flatMap((i) => i.customers.filter((c) => c.sanctioned).map((c) => `${i.id}:${c.id}`)));
     this.blocks = [];
     this.log = [];
+    this.outcomes = new Map(); // inst_id -> where and how it ended; rebuilt from the log on recovery (P3)
+    this.outcomeLimit = 100_000;
     this.clockOffset = 0;
     this.agentKeys = {}; // grantId -> keypair, demo-only custody: a real agent holds its own key and never shares it with the network
     this.corePaused = false;
@@ -177,6 +179,7 @@ export class Network {
       this.log.push({ time: rec.time, txs: rec.txs });
       this.blocks.push(this.#makeBlock(res));
       if (this.blocks.length > 500) this.blocks.shift();
+      this.#noteOutcomes(rec.txs, res);
       last = rec;
     }
     if (last) {
@@ -257,7 +260,9 @@ export class Network {
     const r = block.results[0];
     this.pumpCore();
     const info = ERROR_CATALOG[r.error] || {};
-    return { ok: r.ok, error: r.error, message: r.message, retryable: r.ok ? false : !!info.retryable, remedy: r.ok ? null : info.remedy || null, events: r.events, caller: r.caller, height: block.height, hash: block.hash };
+    const was = r.error === 'DUPLICATE_INSTRUCTION' ? this.outcomes.get(tx.inst_id) : undefined;
+    const original = was && was.ok ? { ok: true, height: was.height, hash: was.hash } : undefined;
+    return { ...(original ? { original } : {}), ok: r.ok, error: r.error, message: r.message, retryable: r.ok ? false : !!info.retryable, remedy: r.ok ? null : info.remedy || null, events: r.events, caller: r.caller, height: block.height, hash: block.hash };
   }
 
   // Grants with live status and remaining window headroom; every amount a decimal string of cents.
@@ -280,7 +285,7 @@ export class Network {
     const types = Object.getOwnPropertyNames(Ledger.prototype).filter((k) => k.startsWith('tx_')).map((k) => k.slice(3)).sort().map((type) => ({ type, grantable: GRANTABLE_TYPES.includes(type), signatures: SIG[type] || null }));
     return {
       version: 'depositx-poc-schema/1',
-      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'grant?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest, grant } (grant omitted when absent)', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', grant: 'REQUIRED, and signed, on every instruction that carries an agent:<grant_id> signature, and equal to that grant_id (else GRANT_MISMATCH); must be absent otherwise. It stops a relayer moving signed bytes onto another grant that shares the agent key', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
+      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'grant?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest, grant } (grant omitted when absent)', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', grant: 'REQUIRED, and signed, on every instruction that carries an agent:<grant_id> signature, and equal to that grant_id (else GRANT_MISMATCH); must be absent otherwise. It stops a relayer moving signed bytes onto another grant that shares the agent key', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution, and the response carries `original` ({ok, height, hash}) when the first attempt was accepted; GET /api/instruction/<inst_id> returns {found, ok, type, error, height, hash, via?} for any instruction this node has seen (bounded index, rebuilt from the log on restart)', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
       grantable_types: GRANTABLE_TYPES,
       types,
       errors: ERROR_CATALOG,
@@ -349,6 +354,34 @@ export class Network {
     return block;
   }
 
+  // P3: remember how each instruction ended so an agent that lost a response can ask. An accepted outcome is never
+  // overwritten (a retry is rejected as a duplicate; the first, real outcome stays the answer); a rejection may be.
+  // The legs of an accepted batch are answered with the batch's block. Bounded: the oldest entries go first.
+  #noteOutcomes(txs, res) {
+    const put = (id, o) => {
+      if (typeof id !== 'string') return;
+      const had = this.outcomes.get(id);
+      if (had && had.ok) return;
+      this.outcomes.delete(id);
+      this.outcomes.set(id, o);
+      while (this.outcomes.size > this.outcomeLimit) this.outcomes.delete(this.outcomes.keys().next().value);
+    };
+    txs.forEach((tx, i) => {
+      const r = res.results[i];
+      if (!tx || !r) return;
+      const where = { height: res.header.height, hash: res.hash };
+      put(tx.inst_id, { ok: r.ok, type: tx.type, error: r.ok ? null : r.error, ...where });
+      if (r.ok && tx.type === 'BATCH' && Array.isArray(tx.payload && tx.payload.legs)) {
+        for (const leg of tx.payload.legs) if (leg && typeof leg.inst_id === 'string') put(leg.inst_id, { ok: true, type: leg.type, error: null, ...where, via: tx.inst_id });
+      }
+    });
+  }
+  // The recorded outcome of an instruction by inst_id: where it landed (height, block hash) and whether it was accepted.
+  outcome(instId) {
+    const o = typeof instId === 'string' ? this.outcomes.get(instId) : undefined;
+    return o ? { found: true, ...o } : { found: false };
+  }
+
   // `consumeTask`: an adapter follow-up that this block completes. It is removed from the backlog BEFORE the
   // record is persisted, so a crash right after this block cannot make recovery redo it.
   submit(txs, { consumeTask } = {}) {
@@ -358,6 +391,7 @@ export class Network {
     const block = this.#makeBlock(res);
     this.blocks.push(block);
     if (this.blocks.length > 500) this.blocks.shift();
+    this.#noteOutcomes(txs, res);
     for (const r of res.results) if (r.ok) this.#onEvents(r.events);
     if (consumeTask && res.results[0].error !== 'NETWORK_HALTED') this.coreTasks = this.coreTasks.filter((x) => x !== consumeTask);
     if (this.store) {
