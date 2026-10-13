@@ -1,0 +1,126 @@
+{
+ "PAYMENT.queueIfShort": [
+  "null",
+  "<missing>",
+  "true",
+  "false"
+ ],
+ "ESCROW_LOCK.escrowId": [
+  "\"x\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\""
+ ],
+ "ESCROW_LOCK.releaseRole": [
+  "null",
+  "<missing>",
+  "\"\"",
+  "0",
+  "NaN",
+  "false",
+  "\"ops:MPL\""
+ ],
+ "ESCROW_LOCK.eventName": [
+  "null",
+  "<missing>"
+ ],
+ "REGISTER_SWEEP.sweepId": [
+  "\"x\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\""
+ ],
+ "REGISTER_SWEEP.keepAmount": [
+  "\"0\""
+ ],
+ "GRANT.grant_id": [
+  "\"x\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\""
+ ],
+ "GRANT.label": [
+  "<missing>",
+  "\"\"",
+  "\"x\"",
+  "\" 5\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1.5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\"",
+  "\"ops:MPL\""
+ ],
+ "GRANT.parent": [
+  "null",
+  "<missing>"
+ ],
+ "GRANT.counterparties": [
+  "null",
+  "<missing>"
+ ],
+ "OPEN_ACCOUNT.holderRef": [
+  "\"x\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\""
+ ],
+ "OPEN_ACCOUNT.kycRef": [
+  "<missing>",
+  "\"\"",
+  "\"x\"",
+  "\" 5\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1.5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\"",
+  "\"ops:MPL\""
+ ],
+ "OPEN_ACCOUNT.kycExpires": [
+  "0",
+  "-1"
+ ],
+ "OPEN_HOLD.holdId": [
+  "\"x\"",
+  "\" 5\"",
+  "\"0\"",
+  "\"00\"",
+  "\"-5\"",
+  "\"1.5\"",
+  "\"1e3\"",
+  "\"9999999999999999999\"",
+  "\"constructor\"",
+  "\"__proto__\"",
+  "\"ops:MPL\""
+ ],
+ "ATTEST.seq": [
+  "0",
+  "-1"
+ ],
+ "ATTEST.L": [
+  "\"0\""
+ ]
+}
