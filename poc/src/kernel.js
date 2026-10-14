@@ -671,7 +671,7 @@ export class Ledger {
       // settle. Refuse it now (nothing is charged: the journal rolls back) until netting understands grants.
       need(!this.#derived, 'AGENT_QUEUE_UNSUPPORTED', 'an agent-authorised payment cannot wait in the netting queue; submit it when the settlement position covers it');
       need(from.balance >= x, 'INSUFFICIENT_FUNDS');
-      j.field(this.s, 'queue', [...this.s.queue, { instId: tx.inst_id, queuedAt: time, tx: { inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, ...this.#effectiveCaller(tx), sigs: tx.sigs } }]);
+      j.field(this.s, 'queue', [...this.s.queue, { instId: tx.inst_id, queuedAt: time, tx: { inst_id: tx.inst_id, type: tx.type, payload: tx.payload, valid_until: tx.valid_until, ...this.#effectiveCaller(tx), ...(tx.batch_digest ? { batch_digest: tx.batch_digest } : {}), sigs: tx.sigs } }]);
       events.push({ type: 'QUEUED', issuer: A.id, id: tx.inst_id, amount: x.toString(), from: from.id, to: to.id });
       return;
     }

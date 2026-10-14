@@ -44,3 +44,18 @@ test('control: an institution-signed queued payment still nets (the queue itself
   n.netCycle();
   assert.equal(n.ledger.s.queue.length, 0);
 });
+
+test('a queued payment that rode in a bound batch still nets (the stored copy keeps the signed batch_digest)', () => {
+  const n = new Network();
+  n.defund('MPL', n.ledger.s.issuers.get('MPL').sp - dollars(50));
+  const legs = n.buildBoundBatch([
+    { type: 'PAYMENT', payload: { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(200).toString(), queueIfShort: true }, roles: ['ops:MPL', 'screen:MPL', 'accept:NSR'] },
+    { type: 'TRANSFER', payload: { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(1).toString() }, roles: ['ops:MPL', 'screen:MPL'] },
+  ]);
+  const r = n.submitSigned(n.tx('BATCH', { legs }, []));
+  assert.ok(r.ok, `${r.error}: ${r.message}`);
+  assert.equal(n.ledger.s.queue.length, 1);
+  n.submitSigned(n.tx('PAYMENT', { from: 'NSR:cedar', to: 'MPL:acme', amount: dollars(200).toString(), queueIfShort: true }, ['ops:NSR', 'screen:NSR', 'accept:MPL']));
+  n.netCycle();
+  assert.equal(n.ledger.s.queue.length, 0, 'the bound leg settled in the netting cycle');
+});

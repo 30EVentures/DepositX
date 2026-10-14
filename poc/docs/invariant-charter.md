@@ -22,7 +22,7 @@ mint holds; `R_i` pending core debits (redemptions and convert-outs); `P_i` pend
 | **P3 Par transfer** | every cross-issuer instruction burns and mints the same amount and moves each settlement position by exactly that amount; no fee, rate or rounding in the kernel | `assertParLegs` (Transfer/Payment/DvP legs; Escrow's lock/refund reuse the same `#moveCash` path, so they are proven by the same code, not a parallel implementation) | reject | cross-bank payment test, fuzz vs reference model |
 | **P4 Settlement backing** | `SP_i ≥ 0` and `Σ SP_i = A − F` | `tx_PAYMENT` check, `checkInvariants` | reject / halt | model check S1, netting test, mutation "ignores position" |
 | **P5 Non-negativity** | every balance `≥ 0` | `#debit`, `checkInvariants` | reject / halt | overdraft attack, fuzz |
-| **P6 Authority** | mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key **or a live grant's agent key, inside the grant's envelope**; payee issuer must accept; the operator can move no balance; a grant can only narrow its parent and is dead if any ancestor is revoked or expired | `#sig` per handler; `#authorize` for grantable handlers | reject | forged/missing-signature tests, "operator cannot move a balance" test, `delegation.test.js`, model check S6 and four planted delegation bugs |
+| **P6 Authority** | mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key **or a live grant's agent key, inside the grant's envelope**; payee issuer must accept; the operator can move no balance; a grant can only narrow its parent and is dead if any ancestor is revoked or expired | `#sig` per handler; `#authorize` for grantable handlers | reject | forged/missing-signature tests, "operator cannot move a balance" test, `delegation.test.js`, model check S6 and eight planted delegation bugs |
 | **P7 Halt monotonicity** | once halted only `RESUME` (governance ×2 + observer, + issuer key for an issuer resume, and only if the invariants hold), `ATTEST` and `REPORT_PAR_BREAK` are accepted | `#execTx` gate, `tx_RESUME` | structural | halt/resume tests |
 
 ## Properties beyond the seven
@@ -303,7 +303,7 @@ outside the digest, so a relayer can add such a key to an institution-signed ins
 holding agent-signed instructions made before this change would fail replay. The same was true of earlier
 additions to the digest (`caller`, `batch_digest`). This proof of concept has no deployed chain, so no activation
 height was added; any real store would need one or a domain-tag bump. The change also touches the `#authorize` /
-envelope region that the unmerged hardening-x1 branch edits, so that branch will conflict when rebased.
+envelope region that hardening-x1 also edits; the two were reconciled when the branches were integrated (the order of checks is: caller shape, grant binding, then signatures before any state lookup).
 
 **Model-check coverage.** The delegation alphabet goes from 21 to 25 actions: a second root grant `g4` that shares
 `g1`'s key and is broader ($10 / $10), a legitimate `g4` transfer, and two attacks that must always be refused and

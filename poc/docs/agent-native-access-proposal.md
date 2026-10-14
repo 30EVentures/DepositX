@@ -306,11 +306,11 @@ the same shape as S6(a), lifted from a chain to the whole issuer.
 the block log and the model's own record of which grants exist, sharing no code with the kernel, and walks
 each action's blocks in order carrying what the action has already charged (as 7.1 does for sweep firings).
 
-**Model actions** (the delegation alphabet is 21 actions and exhausts at 1,767 states, so expect growth and
+**Model actions** (the delegation alphabet was 21 actions and exhausted at 1,767 states when this was written; it is now 25 actions and 12,478 states, so expect growth and
 possibly a deeper search or a larger cap; measure before promising exhaustion):
-a second root grant `g4`, sibling of `g1` (the model's only roots today are `g1`; `g3` is an attack-only
-sub-grant); `set budget MPL $3 / 86400 s`; `lower budget to $1`; `agent g4 transfer $2`; and the key attack,
-**`agent g1 transfer $2` then `agent g4 transfer $2`**, each inside its own cap, jointly over the budget, where
+a second root grant `g5` with its OWN key, sibling of `g1` (`g4` is already taken by the grant-binding actions: a root that shares `g1`'s key; `g3` is an attack-only
+sub-grant); `set budget MPL $3 / 86400 s`; `lower budget to $1`; `agent g5 transfer $2`; and the key attack,
+**`agent g1 transfer $2` then `agent g5 transfer $2`**, each inside its own cap, jointly over the budget, where
 the second must be refused without a co-signature; plus `ATTACK agent g1 signs SET_AGENT_BUDGET`, which must
 always be rejected.
 
@@ -351,5 +351,5 @@ delegation figure when no budget is set, which is the proof that B is additive.
 - **X3.2** `SET_AGENT_BUDGET`, the synthetic chain root, `GET /api/grants` presentation, error codes and
   `schema()` entries.
 - **X3.3** Targeted tests first (including the three-roots case from 11.1, now refused), then implementation.
-- **X3.4** Model checker: `g4`, the budget actions, S6(e), five planted bugs; real numbers into the charter.
+- **X3.4** Model checker: `g5`, the budget actions, S6(e), five planted bugs; real numbers into the charter.
 - **X3.5** Docs: README row and limits, charter entry, this proposal marked implemented with amendments.

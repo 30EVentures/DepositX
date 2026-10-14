@@ -113,7 +113,7 @@ http
       if (req.method === 'GET' && url.pathname.startsWith('/api/instruction/')) {
         let id = '';
         try { id = decodeURIComponent(url.pathname.slice('/api/instruction/'.length)); } catch { /* not a valid escape: an id that cannot match */ }
-        return json(res, 200, net.outcome(id));
+        return json(res, 200, net.outcome(id, url.searchParams.get('digest') || undefined));
       }
       if (req.method === 'GET' && url.pathname === '/api/verify') return json(res, 200, net.verifyReplay());
       if (req.method === 'GET' && url.pathname === '/api/bench') return json(res, 200, bench({ n: 20000 }));
