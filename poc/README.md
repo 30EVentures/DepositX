@@ -6,6 +6,8 @@ Escrow/PayOnEvent/Batch/Standing-Sweep (the spec's full Phase 1+2 template launc
 liquidity-saving netting, the seven par invariants (P1–P7), and the graded halt
 (quarantine one issuer vs halt the network). Zero dependencies; Node 20+.
 
+This is a proof of concept. Consensus is simulated in one process, there is no bank partner, and it is not regulated, not final and not live.
+
 The dashboard is a human-convenience shell, not the primary interface: every button in
 `public/index.html` calls the same `GET /api/state` / `POST /api/action` JSON API that any
 other caller — a script, a test, or an autonomous agent — can call directly (see `curl`

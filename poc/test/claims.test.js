@@ -38,6 +38,7 @@ export const TERMS = [
   { id: 'approved by', re: /\bapproved by\b/i },
   { id: 'insured', re: /\binsured\b/i },
   { id: 'guaranteed', re: /\bguarantee(s|d)?\b/i },
+  { id: 'settled', re: /\bsettled\b/i }, // "settled" is a finality word; it must say simulated (hardening phase 0.2)
 ];
 // A sentence carrying one of these is saying what the PoC is NOT, or that it is simulated. Reviewed list: widen it
 // only with a reason, because every word added makes the test easier to satisfy.

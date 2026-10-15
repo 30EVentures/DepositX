@@ -8,8 +8,24 @@ export const TASKS = Object.freeze({
   halted: 'simulated network halted',
   quarantined: 'simulated issuer quarantined',
   running: 'simulated network running',
+  sweep: 'simulated sweep fired',
+  refused: 'simulated authorization refused',
   idle: '',
 });
+
+// Refusals that mean "a caller was not authorised" (a signature, a grant, an envelope). A refusal for any other reason
+// (funds, caps, duplicates, validity) is an ordinary block, not a review.
+export const AUTH_REFUSALS = new Set(['BAD_SIGNATURE', 'MISSING_SIGNATURE', 'ESCALATION_REQUIRED', 'ENVELOPE_DENIED', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_MISMATCH', 'GRANT_WRONG_ISSUER', 'CALLER_MISMATCH', 'UNKNOWN_GRANT', 'REVOKE_NOT_AUTHORISED', 'SWEEP_WRONG_GRANT', 'ESCROW_WRONG_GRANT', 'MULTIPLE_AGENT_SIGS']);
+
+/** The phase of one recorded block: incident > refused > sweep > block. Reads only booleans and counts, never contents. */
+export function classifyBlock(block, halted) {
+  if (halted) return 'incident';
+  if (!block || typeof block !== 'object') return 'block';
+  if (Array.isArray(block.violations) && block.violations.length > 0) return 'incident';
+  if (Array.isArray(block.results) && block.results.some((r) => r && r.ok === false && AUTH_REFUSALS.has(r.error))) return 'refused';
+  if (Array.isArray(block.sweepFires) && block.sweepFires.some((f) => f && !f.suspended && typeof f.amount === 'string' && f.amount !== '0')) return 'sweep';
+  return 'block';
+}
 
 const INERT = Object.freeze({ configured: false, tick() {}, detach() {}, state() { return 'inert'; } });
 
@@ -45,7 +61,13 @@ export function attachMeshReporter(net, { reporter, now = Date.now, timers = glo
     const st = read();
     if (st !== 'ok') { if (lastKey !== st) incident(st); return; }
     if (lastKey === 'halted' || lastKey === 'quarantined') { send('ACTIVE', TASKS.running, 'running'); return; }
-    if (t - lastBlockSentAt >= minIntervalMs) { lastBlockSentAt = t; send('ACTIVE', TASKS.block, 'block'); }
+    if (t - lastBlockSentAt >= minIntervalMs) {
+      lastBlockSentAt = t;
+      const kind = classifyBlock(net.blocks[net.blocks.length - 1], false);
+      if (kind === 'refused') send('REVIEWING', TASKS.refused, 'refused');
+      else if (kind === 'sweep') send('BUILDING', TASKS.sweep, 'sweep');
+      else send('ACTIVE', TASKS.block, 'block');
+    }
   };
   const listener = (ev) => { try { onEvent(ev); } catch { /* never throws into submit() */ } };
 

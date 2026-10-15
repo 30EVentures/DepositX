@@ -1,2 +1,9 @@
 node_modules/
 .DS_Store
+.env
+.env.*
+*.pem
+*.key
+keys.json
+data/
+.flashyos/

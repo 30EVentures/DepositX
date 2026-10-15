@@ -53,7 +53,7 @@ Optional variables: `DEPOSITX_MODE=agent` (refuse the server-signed demo endpoin
 ### What to look for
 - The server's start-up line ends `mesh presence on; demo mode` (or `agent mode`). With any of the three variables missing it says `mesh presence off` and sends nothing.
 - In the dashboard the agent appears in a room: ACTIVE after start, IDLE after about a minute without a block, INCIDENT after a fault injection such as `core_loss` (a halt) or `fire_alarm` (a quarantine). A `HTTP_401` in `presence.mjs --send` means a wrong token or agent name; `HTTP_403`/`404` a wrong organisation id.
-- The task text is always one of: `simulated network started`, `simulated block processed`, `simulated network running`, `simulated network halted`, `simulated issuer quarantined`, or empty. Anything else is a bug.
+- The status is one of ACTIVE (a block was processed), BUILDING (a sweep fired), REVIEWING (an authorization was refused), INCIDENT (an invariant broke: a halt or a quarantine) or IDLE. The task text is always one of: `simulated network started`, `simulated block processed`, `simulated sweep fired`, `simulated authorization refused`, `simulated network running`, `simulated network halted`, `simulated issuer quarantined`, or empty. Anything else is a bug.
 
 ### Verification commands
 ```bash

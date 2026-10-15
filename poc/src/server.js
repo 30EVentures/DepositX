@@ -123,7 +123,7 @@ http
       }
       // Roadmap 6.2: the agent-facing interface. /api/schema and /api/grants are read-only;
       // /api/submit takes an instruction the CALLER signed - the server never signs on this path.
-      if (req.method === 'GET' && url.pathname === '/api/schema') return json(res, 200, Network.schema());
+      if (req.method === 'GET' && url.pathname === '/api/schema') return json(res, 200, labelState(Network.schema()));
       if (req.method === 'GET' && url.pathname === '/api/grants') {
         const iss = url.searchParams.get('issuer');
         if (iss && !['MPL', 'NSR', 'LKS'].includes(iss)) return json(res, 400, { ok: false, error: 'BAD_REQUEST', message: 'bad issuer' });
