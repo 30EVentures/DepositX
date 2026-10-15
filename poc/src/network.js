@@ -3,7 +3,7 @@
 // dashboard and tests drive. Nothing in the kernel depends on this file.
 
 import crypto from 'node:crypto';
-import { Ledger, GRANTABLE_TYPES, batchDigestOf } from './kernel.js';
+import { Ledger, GRANTABLE_TYPES, batchDigestOf, messageOf } from './kernel.js';
 import { Bank } from './bank.js';
 import { canon, genKey, sign, verify, sha256, exportKey, importKey } from './crypto.js';
 import { Store } from './store.js';
@@ -19,11 +19,11 @@ export const ERROR_CATALOG = {
   GRANT_EXPIRED: { retryable: false, remedy: 'The grant or one of its ancestors passed its not_after time. Obtain a new grant.' },
   GRANT_WIDENS_PARENT: { retryable: false, remedy: 'A sub-grant may only narrow its parent: types, per-instruction max, window cap, counterparties and expiry must all be within the parent.' },
   GRANT_WRONG_ISSUER: { retryable: false, remedy: 'A grant only authorises the issuer that created it.' },
-  UNKNOWN_GRANT: { retryable: false, remedy: 'No grant with that id is on the ledger (check GET /api/grants).' },
-  CALLER_MISMATCH: { retryable: false, remedy: 'An agent-signed instruction cannot declare caller.kind human; omit caller or declare agent.' },
-  BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it.' },
+  UNKNOWN_GRANT: { retryable: false, remedy: 'No grant with that id is on the ledger (check GET /api/grants). Only an authenticated caller sees this (e.g. REVOKE_GRANT naming a missing target); a signature that names a grant that does not exist is reported as BAD_SIGNATURE, on purpose.' },
+  CALLER_MISMATCH: { retryable: false, remedy: 'A declared caller is {kind, label?} only (no other fields; the kernel stamps grant_id itself), and an agent-signed instruction cannot declare caller.kind human. Omit caller or declare it in that shape.' },
+  BAD_SIGNATURE: { retryable: false, remedy: 'A signature does not verify over the instruction digest. Re-sign the exact instruction; any change after signing invalidates it. An agent:<grant_id> signature for a grant that does not exist gets this same answer, so check the grant id and key against GET /api/grants.' },
   MISSING_SIGNATURE: { retryable: false, remedy: 'A required role signature is absent. See GET /api/schema for the roles this type needs.' },
-  DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already processed: the original outcome stands. Do not resend; use a new inst_id for a new instruction.' },
+  DUPLICATE_INSTRUCTION: { retryable: false, remedy: 'This inst_id was already accepted: the original outcome stands and is returned in `original` ({ok, height, hash}); GET /api/instruction/<inst_id>?digest=<sha256 of your signed message> gives it again. Do not resend; use a new inst_id for a new instruction.' },
   BAD_VALIDITY: { retryable: true, remedy: 'valid_until must be within 60 seconds of block time. Re-sign with a fresh valid_until and a NEW inst_id.' },
   INSUFFICIENT_FUNDS: { retryable: true, remedy: 'The payer balance is below the amount. Retry after funds arrive, with a new inst_id.' },
   INSUFFICIENT_SETTLEMENT_POSITION: { retryable: true, remedy: 'The issuer settlement position is short. Retry later, or set queueIfShort to wait for netting.' },
@@ -33,6 +33,9 @@ export const ERROR_CATALOG = {
   BATCH_MIXED_CALLERS: { retryable: false, remedy: 'Every leg of a batch must have the same effective caller: all authorised by the same grant, or all signed by the institution with the same declared caller. Split it into one batch per caller.' },
   SWEEP_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that registered this sweep, or one of its ancestors, may cancel it. Ask the institution, or the registering grant itself, to cancel it.' },
   ESCROW_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that locked this escrow, or one of its ancestors, may refund it. Ask the institution, or the locking grant itself, to refund it.' },
+  AGENT_QUEUE_UNSUPPORTED: { retryable: true, remedy: 'An agent-authorised PAYMENT cannot be queued for liquidity-saving netting yet. Retry with queueIfShort false (it will be refused while the settlement position is short), or once the payer issuer\'s position covers the amount, or ask the institution to submit it with its own signature.' },
+  ESCROW_ACCOUNT_RESERVED: { retryable: false, remedy: 'The account is an escrow holding account (<issuer>:escrow:<id>). Its money moves only through ESCROW_RELEASE, EVENT_RELEASE or ESCROW_REFUND for that escrow; address the beneficiary or payer account instead.' },
+  GRANT_MISMATCH: { retryable: false, remedy: "An instruction signed by an agent must carry a `grant` field equal to the grant_id of its single `agent:<grant_id>` signature, and `grant` is part of the signed bytes. Set `grant`, sign again with a new inst_id, and do not relabel a signature after signing. An instruction with no agent signature must not carry `grant`." },
   BATCH_LEG_MISBOUND: { retryable: false, remedy: 'This instruction was signed with a batch_digest binding it to a specific set and order of legs. Submit it inside exactly that batch, unchanged, or re-sign it with a new inst_id and no batch_digest to run it standalone.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
 };
@@ -117,6 +120,10 @@ export class Network {
     this.sanctioned = new Set(ISSUERS.flatMap((i) => i.customers.filter((c) => c.sanctioned).map((c) => `${i.id}:${c.id}`)));
     this.blocks = [];
     this.log = [];
+    this.outcomes = new Map(); // inst_id -> where an ACCEPTED instruction landed (+ its digest); rebuilt from the log on recovery (P3)
+    this.outcomeLimit = 100_000;
+    this.rejections = new Map(); // `${inst_id}|${digest}` -> a rejection, kept apart so a flood of garbage cannot evict a real outcome
+    this.rejectionLimit = 10_000;
     this.clockOffset = 0;
     this.agentKeys = {}; // grantId -> keypair, demo-only custody: a real agent holds its own key and never shares it with the network
     this.corePaused = false;
@@ -174,6 +181,7 @@ export class Network {
       this.log.push({ time: rec.time, txs: rec.txs });
       this.blocks.push(this.#makeBlock(res));
       if (this.blocks.length > 500) this.blocks.shift();
+      this.#noteOutcomes(rec.txs, res);
       last = rec;
     }
     if (last) {
@@ -229,8 +237,11 @@ export class Network {
   // legs hash to this digest (see `batchDigestOf` in kernel.js) - also part of the signed digest.
   tx(type, payload, roles, { ttl = 60, keyOverride = {}, instId, caller, batchDigest } = {}) {
     const t = { inst_id: instId || `${type.toLowerCase()}-${Date.now().toString(36)}-${(++this.counter).toString(36)}-${crypto.randomBytes(3).toString('hex')}`, type, payload, valid_until: this.now() + ttl, caller: caller || { kind: 'unspecified' }, batch_digest: batchDigest || null, sigs: {} };
+    // grant binding: an agent-signed instruction names its grant inside the signed bytes (the kernel requires it)
+    const agentRoles = roles.filter((r) => r.startsWith('agent:'));
+    if (agentRoles.length === 1) t.grant = agentRoles[0].slice('agent:'.length);
     // sign using the same canonical message the kernel verifies
-    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller, batch_digest: t.batch_digest });
+    const msg = canon({ d: 'depositx-poc-v1', chain: this.genesis.chainId, inst_id: t.inst_id, type: t.type, payload: t.payload, valid_until: t.valid_until, caller: t.caller, batch_digest: t.batch_digest, grant: t.grant || undefined });
     for (const r of roles) t.sigs[r] = sign(keyOverride[r] || this.sk(r), msg);
     return t;
   }
@@ -251,7 +262,9 @@ export class Network {
     const r = block.results[0];
     this.pumpCore();
     const info = ERROR_CATALOG[r.error] || {};
-    return { ok: r.ok, error: r.error, message: r.message, retryable: r.ok ? false : !!info.retryable, remedy: r.ok ? null : info.remedy || null, events: r.events, caller: r.caller, height: block.height, hash: block.hash };
+    const was = r.error === 'DUPLICATE_INSTRUCTION' ? this.outcomes.get(tx.inst_id) : undefined;
+    const original = was && was.digest === this.digestOf(tx) ? { ok: true, height: was.height, hash: was.hash } : undefined; // only for the very bytes that were accepted
+    return { ...(original ? { original } : {}), ok: r.ok, error: r.error, message: r.message, retryable: r.ok ? false : !!info.retryable, remedy: r.ok ? null : info.remedy || null, events: r.events, caller: r.caller, height: block.height, hash: block.hash };
   }
 
   // Grants with live status and remaining window headroom; every amount a decimal string of cents.
@@ -274,7 +287,7 @@ export class Network {
     const types = Object.getOwnPropertyNames(Ledger.prototype).filter((k) => k.startsWith('tx_')).map((k) => k.slice(3)).sort().map((type) => ({ type, grantable: GRANTABLE_TYPES.includes(type), signatures: SIG[type] || null }));
     return {
       version: 'depositx-poc-schema/1',
-      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest }', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
+      envelope: { instruction: ['inst_id', 'type', 'payload', 'valid_until', 'caller?', 'batch_digest?', 'grant?', 'sigs'], signed_digest: 'canonical JSON of { d, chain, inst_id, type, payload, valid_until, caller, batch_digest, grant } (grant omitted when absent)', signature: 'ed25519, hex', amounts: 'decimal strings of integer cents', valid_until: 'within 60 seconds of block time', grant: 'REQUIRED, and signed, on every instruction that carries an agent:<grant_id> signature, and equal to that grant_id (else GRANT_MISMATCH); must be absent otherwise. It stops a relayer moving signed bytes onto another grant that shares the agent key', idempotency: 'inst_id is unique; a resubmission is DUPLICATE_INSTRUCTION, never a second execution, and the response carries `original` ({ok, height, hash}) when the first attempt was accepted; GET /api/instruction/<inst_id>?digest=<hex> returns {found, ok, type, error, height, hash, via?} for an instruction this node has seen, only when the digest (sha256 hex of the exact message the signatures cover) matches; found:false means unknown to the bounded index of this node, not that it never ran', batch_digest: 'optional hash (see batchDigestOf) over the exact, ordered inst_ids of every leg this instruction was signed to ride with; once set, it is refused anywhere that exact set/order is not the ambient batch (or run standalone)' },
       grantable_types: GRANTABLE_TYPES,
       types,
       errors: ERROR_CATALOG,
@@ -343,6 +356,58 @@ export class Network {
     return block;
   }
 
+  // P3: remember how each instruction ended so an agent that lost a response can ask. Answers are bound to the SIGNED
+  // BYTES: every record carries the digest of the exact message the signatures cover, and a lookup must present it, so
+  // knowing an inst_id alone learns nothing and a different instruction that reuses an id is never told the original
+  // succeeded. Accepted outcomes (never overwritten) and rejections live in separate bounded maps, oldest first, so
+  // an unauthenticated flood of garbage can only push out other rejections. A DUPLICATE_INSTRUCTION rejection is never
+  // recorded (it would shadow the real outcome once that is evicted). The legs of an accepted batch are answered with
+  // the batch's block. "Not found" means unknown to this node's index, not "never executed".
+  digestOf(tx) {
+    try {
+      return sha256(messageOf(tx, this.genesis.chainId));
+    } catch {
+      return undefined;
+    }
+  }
+  #noteOutcomes(txs, res) {
+    const trim = (m, limit) => { while (m.size > limit) m.delete(m.keys().next().value); };
+    const accept = (id, tx, o) => {
+      const digest = this.digestOf(tx);
+      if (typeof id !== 'string' || !digest || this.outcomes.has(id)) return;
+      this.outcomes.set(id, { ...o, digest });
+      trim(this.outcomes, this.outcomeLimit);
+    };
+    txs.forEach((tx, i) => {
+      const r = res.results[i];
+      if (!tx || !r || typeof tx.inst_id !== 'string') return;
+      const where = { height: res.header.height, hash: res.hash };
+      if (r.ok) {
+        accept(tx.inst_id, tx, { ok: true, type: tx.type, error: null, ...where });
+        if (tx.type === 'BATCH' && Array.isArray(tx.payload && tx.payload.legs)) {
+          for (const leg of tx.payload.legs) if (leg && typeof leg.inst_id === 'string') accept(leg.inst_id, leg, { ok: true, type: leg.type, error: null, ...where, via: tx.inst_id });
+        }
+      } else if (r.error !== 'DUPLICATE_INSTRUCTION') {
+        const digest = this.digestOf(tx);
+        if (!digest) return;
+        const key = `${tx.inst_id}|${digest}`;
+        this.rejections.delete(key);
+        this.rejections.set(key, { ok: false, type: tx.type, error: r.error, ...where, digest });
+        trim(this.rejections, this.rejectionLimit);
+      }
+    });
+  }
+  // How an instruction ended, by inst_id AND the digest of its signed message (sha256 hex of the exact string the
+  // signatures cover; `digestOf`). Returns {found:false} unless both match.
+  outcome(instId, digest) {
+    if (typeof instId !== 'string' || typeof digest !== 'string') return { found: false };
+    const acc = this.outcomes.get(instId);
+    const o = acc && acc.digest === digest ? acc : this.rejections.get(`${instId}|${digest}`);
+    if (!o) return { found: false };
+    const { digest: _d, ...rest } = o;
+    return { found: true, ...rest };
+  }
+
   // `consumeTask`: an adapter follow-up that this block completes. It is removed from the backlog BEFORE the
   // record is persisted, so a crash right after this block cannot make recovery redo it.
   submit(txs, { consumeTask } = {}) {
@@ -352,6 +417,7 @@ export class Network {
     const block = this.#makeBlock(res);
     this.blocks.push(block);
     if (this.blocks.length > 500) this.blocks.shift();
+    this.#noteOutcomes(txs, res);
     for (const r of res.results) if (r.ok) this.#onEvents(r.events);
     if (consumeTask && res.results[0].error !== 'NETWORK_HALTED') this.coreTasks = this.coreTasks.filter((x) => x !== consumeTask);
     if (this.store) {
@@ -370,11 +436,13 @@ export class Network {
     return block;
   }
 
-  // A finality receipt is verifiable offline: header hash plus at least QUORUM validator signatures.
+  // A block receipt is verifiable offline: header hash plus at least QUORUM validator signatures. Here all four
+  // validator keys live in one process, so it shows the host's own signing, not independent agreement.
   static verifyReceipt(genesis, block) {
+    if (!block || !block.header || block.header.chainId !== genesis.chainId) return false; // a receipt proves its own chain only
     if (sha256(canon(block.header)) !== block.hash) return false;
     let n = 0;
-    for (const v of genesis.validators) if (block.sigs[v.id] && verify(v.pub, block.hash, block.sigs[v.id])) n++;
+    for (const v of genesis.validators) if (block.sigs && block.sigs[v.id] && verify(v.pub, block.hash, block.sigs[v.id])) n++;
     return n >= QUORUM;
   }
 
@@ -734,7 +802,7 @@ export class Network {
     ];
     void anyViol;
     const blocks = this.blocks.slice(-40).reverse().map((b) => ({
-      height: b.height, hash: b.hash, time: b.header.time, finalSigs: Object.keys(b.sigs).length, quorum: b.quorum,
+      height: b.height, hash: b.hash, time: b.header.time, quorumSigs: Object.keys(b.sigs).length, quorum: b.quorum,
       halt: b.header.halt, receiptOk: b.receiptOk, txs: b.results.map((r) => ({ type: r.type, ok: r.ok, error: r.error, message: r.message, events: r.events.map((e) => e.type), caller: r.caller })), stateRoot: b.header.stateRoot,
     }));
     return js({

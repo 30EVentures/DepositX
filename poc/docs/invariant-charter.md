@@ -22,7 +22,7 @@ mint holds; `R_i` pending core debits (redemptions and convert-outs); `P_i` pend
 | **P3 Par transfer** | every cross-issuer instruction burns and mints the same amount and moves each settlement position by exactly that amount; no fee, rate or rounding in the kernel | `assertParLegs` (Transfer/Payment/DvP legs; Escrow's lock/refund reuse the same `#moveCash` path, so they are proven by the same code, not a parallel implementation) | reject | cross-bank payment test, fuzz vs reference model |
 | **P4 Settlement backing** | `SP_i ≥ 0` and `Σ SP_i = A − F` | `tx_PAYMENT` check, `checkInvariants` | reject / halt | model check S1, netting test, mutation "ignores position" |
 | **P5 Non-negativity** | every balance `≥ 0` | `#debit`, `checkInvariants` | reject / halt | overdraft attack, fuzz |
-| **P6 Authority** | mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key **or a live grant's agent key, inside the grant's envelope**; payee issuer must accept; the operator can move no balance; a grant can only narrow its parent and is dead if any ancestor is revoked or expired | `#sig` per handler; `#authorize` for grantable handlers | reject | forged/missing-signature tests, "operator cannot move a balance" test, `delegation.test.js`, model check S6 and four planted delegation bugs |
+| **P6 Authority** | mint needs the issuer's mint key AND a hold registered by its attestation key; debits need the payer issuer's key **or a live grant's agent key, inside the grant's envelope**; payee issuer must accept; the operator can move no balance; a grant can only narrow its parent and is dead if any ancestor is revoked or expired | `#sig` per handler; `#authorize` for grantable handlers | reject | forged/missing-signature tests, "operator cannot move a balance" test, `delegation.test.js`, model check S6 and eight planted delegation bugs |
 | **P7 Halt monotonicity** | once halted only `RESUME` (governance ×2 + observer, + issuer key for an issuer resume, and only if the invariants hold), `ATTEST` and `REPORT_PAR_BREAK` are accepted | `#execTx` gate, `tx_RESUME` | structural | halt/resume tests |
 
 ## Properties beyond the seven
@@ -267,3 +267,153 @@ commit shows the same spread, so it is not caused by this pass. The earlier-reco
 roadmap 5-7 and is not directly comparable. The likely cause is wall-clock time leaking into which
 representative of an aliased state is explored first; it was not investigated further. The routine depth-5
 figure is stable (3,793). Treat depth-6 state counts as accurate to roughly two states.
+
+### Roadmap 8.5: grant binding is mandatory (2026-10-12)
+
+Found while checking whether a same-holder splice is refused (`docs/grant-binding-proposal.md`). Links between
+grants were already bound: a child carries its parent's exact `grant_id` in the signed payload. Ordinary
+instructions were not: the grant that authorised one was chosen by the role label `agent:<id>` on the signature,
+which is outside the signed digest, and two grants may share one agent key. With a shared key, a relayer could
+move signed bytes from a narrow grant onto a broad one (measured: a $500 transfer signed under a $100-cap grant
+returned `ESCALATION_REQUIRED`; the same bytes relabelled onto the other grant were accepted, recorded under the
+wrong grant, and charged to its window). It is not a way for a key holder to do more than the holder could
+already do; it takes the choice of envelope, the audit attribution and the window accounting away from the signer.
+
+**Fix (option A, mandatory).** The signed digest gains a `grant` field. An instruction carrying an `agent:<id>`
+signature must carry `grant` equal to `<id>` or it is refused `GRANT_MISMATCH`; an instruction with no agent
+signature must carry none. The check is in `#checkEnvelope`, so it covers batch legs, sub-grants, revocation by
+an ancestor and an agent `releaseRole` alike, and compares two caller-supplied strings only (it says nothing
+about which grants exist). `canon` drops an undefined key, so the digest of every instruction with no agent
+signature is byte for byte what it was. The institution's escalation co-signature is not in the digest and is
+unaffected. `Network.tx()` binds automatically when exactly one `agent:` role is signed for, so callers using
+`agentTx`, `grantTx` and `revokeGrant` change nothing; an external agent that builds instructions by hand must set `grant`
+(`GET /api/schema` and the error catalogue say so).
+
+**Frozen once executed (found by an independent review, 2026-10-12).** The signed digest is cached per instruction
+object, so a mutated object used to be checked against the digest of its earlier self: after a refusal, moving the
+signature to another grant and setting `grant` on the same object was accepted. (A mutated `payload` behaved the same
+before this change.) Only in-process callers could do it; a submission over HTTP is a fresh object. `executeBlock`
+now deep-freezes every instruction it executes, so the mutation throws a `TypeError` instead, and a variant must be
+a copy (`structuredClone`), which gets its own digest and fails `BAD_SIGNATURE`. One consequence: any `agent:*` key in
+`sigs` now demands a matching `grant`, even on an instruction whose handler ignores agent signatures. `sigs` is
+outside the digest, so a relayer can add such a key to an institution-signed instruction and have it refused
+(`GRANT_MISMATCH`); the clean instruction is unaffected, because a refused instruction is not deduplicated.
+
+**Cost, stated plainly.** Mandatory binding changes what a valid agent-signed instruction is, so a stored chain
+holding agent-signed instructions made before this change would fail replay. The same was true of earlier
+additions to the digest (`caller`, `batch_digest`). This proof of concept has no deployed chain, so no activation
+height was added; any real store would need one or a domain-tag bump. The change also touches the `#authorize` /
+envelope region that hardening-x1 also edits; the two were reconciled when the branches were integrated (the order of checks is: caller shape, grant binding, then signatures before any state lookup).
+
+**Model-check coverage.** The delegation alphabet goes from 21 to 25 actions: a second root grant `g4` that shares
+`g1`'s key and is broader ($10 / $10), a legitimate `g4` transfer, and two attacks that must always be refused and
+inert: "relabel a signed g1 $3 transfer (which needs the institution's signature) onto g4", and the same relabel
+that also re-declares `grant` as g4 (it passes only if `grant` is missing from the signed digest). The S6 oracle gains
+clause (f): an accepted agent-signed instruction's signed `grant` equals the grant of its agent role. One new
+planted bug (a kernel that rewrites the declared grant to match the role label after the digest is computed, so
+the relabel passes) is caught, in a four-step counterexample (mint, mint, grant g4, then the attack),
+by the attack being accepted. Clause (f) reads the instruction's own `grant` field, so it cannot catch a bug
+that rewrites that field; the attack action is what catches that one. The bug "`grant` is not in the digest" cannot be planted from the test without editing the kernel; it was checked by
+hand on a throwaway copy, where the re-declare attack is accepted and the model check goes red. Because the search is exhaustive over the
+alphabet and not over key reuse in general, it covers the shared key of g1 and g4 and nothing more.
+
+| Run | Actions | Depth | States | Transitions | Time | Failures |
+|---|---|---|---|---|---|---|
+| Delegation model, routine (`modelcheck.test.js`) | 25 | 9 | 5,575 | 91,225 | ~66 s (whole file ~123 s) | 0 |
+| Delegation model, one-off (`node src/modelcheck.js 20 delegation`) | 25 | 16 | **12,478, exhausted** | 311,950 | 235.6 s | 0 |
+| Base model, `Date.now` pinned, depth 5 / 6 | unchanged | 5 / 6 | 3,793 / 13,442 | 40,680 / 151,720 | n/a | 0 |
+
+The base-model counts are identical to those before the change (the base alphabet builds no agent instruction),
+which is what binding should do. The routine delegation test was raised from 5,000 to 8,000 states so the
+depth-9 search does not stop at its cap, and it now asserts that it did not.
+
+
+### Hardening X1: authority is checked before state is read (pre-authentication leak)
+
+P6 says who may move a balance; it did not say what an unauthenticated caller may learn. Before X1 the
+handlers resolved accounts, escrows, sweeps and grants before verifying a signature, so `POST /api/submit`
+leaked, through the error code alone, which accounts exist, which are frozen or KYC-expired, which grant ids
+exist and which issuer owns them. Now: (a) a signature the handler needs is named from the caller's own input
+(an account id carries its issuer) and verified before any lookup; (b) when the signer lives in state, a
+`#gate` first needs one valid signature from a key that exists independent of that object; (c) an
+`agent:<id>` signature for a nonexistent grant is `BAD_SIGNATURE`, identical to a wrong key, and the grant's
+issuer is compared only after its key verified. Evidence: `test/preauth-leak.test.js` (identical result objects
+for bad/missing/partly-valid signatures against absent vs present vs frozen vs KYC-expired targets, and
+foreign/revoked/unknown grants, for every affected type; plus a regression group showing the specific errors
+are unchanged once the signature verifies).
+
+**Replay:** error codes are not hashed. `txRoot` is the hash of the submitted instructions and `stateRoot` of
+state (the rejected-code counters are not in it); a rejected instruction changes neither state nor dedup. The
+success condition of every handler is unchanged, so a block log written by the previous kernel replays to the
+same block hashes and state roots (checked by recovering a store written by the pre-fix code, which contained
+rejected probes, with the post-fix code). **Deliberate changes visible to callers:** (1) a caller with a missing or bad signature now gets the signature
+error where it used to get a state error (that is the fix); (2) a signature naming a nonexistent grant is
+`BAD_SIGNATURE`, not `UNKNOWN_GRANT`; (3) where the signer lives in state (`ESCROW_RELEASE`, `ESCROW_REFUND`,
+`CANCEL_SWEEP`, `REVOKE_GRANT`), a caller holding no valid key at all gets `MISSING_SIGNATURE`/`BAD_SIGNATURE`
+before the `UNKNOWN_*` lookup; a caller with some valid participant key still gets `UNKNOWN_*` as before;
+(4) a caller whose valid signatures are for the wrong roles gets the missing-signature error ahead of
+state-free shape errors such as `SELF_TRADE`.
+
+**Decision on the envelope checks.** `MALFORMED`, `BAD_INST_ID`, `BAD_VALIDITY`, `UNKNOWN_TYPE` and `NETWORK_HALTED`
+read only the caller's bytes, the block time or the public halt flag, so they stay before authorisation.
+`DUPLICATE_INSTRUCTION` does reveal one bit of state ("an instruction with this inst_id was accepted in the last
+180 s"); it also stays, because it is recorded only for accepted instructions, is useful only to someone who
+already holds the id (use high-entropy ids; a guessable UETR is a residual), and is what makes a retry
+exactly-once. Not widened to a larger restructure in this item.
+
+### Hardening X2: sweeps are held to the liveness TRANSFER enforces (2026-10-02)
+
+`#runSweeps` (run from `#endOfBlock`) used to check only that both accounts exist and the source is over `keep`.
+It therefore kept moving money during a network halt, while the issuer was quarantined, and from or to a frozen
+or KYC-expired account - all cases where the same movement submitted as a TRANSFER is refused. A sweep is a
+standing instruction that fires without anyone submitting anything, so it must not be the one path that ignores
+those gates.
+
+**The rule.** Before a firing, `#sweepBlockedBy` checks, in `#live`'s own order: network halted
+(`NETWORK_HALTED`), the issuer not ACTIVE (`ISSUER_QUARANTINED`), then each of the two accounts for frozen
+(`ACCOUNT_FROZEN`) and expired KYC (`KYC_EXPIRED`). A blocked sweep is **suspended, not deleted**: it stays
+registered and visible, moves nothing, is reported in `sweepFires` as `{suspended: true, reason}`, can still be
+cancelled by the institution, and fires again by itself in the block that clears the condition (the RESUME or
+UNFREEZE block's own end-of-block hook runs the sweeps). The check runs before the grant logic, so a suspended
+firing is never charged to a grant window. The suspension is reported only when excess exists, matching the
+existing dead-grant suspension.
+
+**Two honest limits, both recorded in the code.**
+1. *The block that detects a break has already run its sweeps.* Sweeps run before the invariant check (so a
+   sweep that clears an account back under `keep` is reflected in the same snapshot), and a same-issuer move is
+   conservation-neutral, so this cannot create a violation; suspension begins with the next block.
+2. *Suspending under quarantine is stricter than TRANSFER, not equal to it.* `#moveCash` checks quarantine only
+   on its cross-issuer branch, so a same-issuer TRANSFER is still accepted while its issuer is quarantined
+   (`sweep-liveness.test.js` pins this). Suspending sweeps there is a policy choice, made because a standing
+   automated rule should not keep moving value in an issuer the graded halt has flagged; it is not "the same
+   check as TRANSFER". Whether TRANSFER itself should refuse under quarantine is a separate question, not
+   changed here.
+
+**Evidence.** 13 tests in `test/sweep-liveness.test.js`, written first; 8 were red against the unmodified kernel
+(each failing on "money moved", not on a harness error); the other five (the control, the pin, the issuer-scope
+guard, the replay test and the cancel test) were green throughout. The harness uses a grant-registered sweep with a short window, which leaves excess
+*pending* when the condition hits (an institution sweep fires immediately, leaving nothing to observe), plus a
+control with no condition applied, so the "nothing moved" assertions are not vacuous. Institution-registered
+sweeps are covered separately for quarantine and a frozen destination. Full suite 209/209 (was 196).
+
+**What the model checker does and does not say about this - read before relying on its numbers.**
+
+| Run (clock frozen, `Date.now` pinned) | Before X2 | After X2 |
+|---|---|---|
+| Base model, depth 5 | 3,793 states / 40,680 transitions, 0 failures | identical |
+| Base model, depth 6 | 13,442 / 151,720, 0 failures | identical |
+| Delegation model, exhausted (depth 13) | 1,767 / 37,107, 0 failures | identical |
+
+The numbers are unchanged and S1-S6 hold, so X2 caused no regression in the space the checker covers. But the
+checker **provides no coverage of X2 itself**. Counting suspended firings during both searches found none from
+halt, quarantine, freeze or KYC (the delegation model only ever hits `GRANT_REVOKED`, 6,772 times). The reason
+is structural, not a missing action: `modelCheck` fails **S1** whenever an action leaves a violation or a halt,
+and its quiescence check (L1) requires no violations and no halt, so halted and quarantined states are, by
+design, unreachable under legitimate actions. Frozen accounts are reachable in principle but no freeze action is
+in the alphabet, and KYC expiry needs a clock advance the model does not take. X2's correctness therefore rests
+on the targeted tests above, not on the search. Closing the gap needs a decision, not just more actions: a
+"fault" action class exempt from S1/L1 for the state it deliberately produces, a property S7 (a sweep moves
+nothing while the network is halted or its issuer quarantined, judged from the model's own tracking of which
+conditions hold, not read from the kernel), freeze/unfreeze actions for the frozen case, and a patchable
+predicate so a mutation test can plant "sweep ignores the gate". That changes what the safety properties assert,
+so it is proposed here and left for sign-off.

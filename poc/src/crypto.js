@@ -10,7 +10,9 @@ function norm(v) {
   if (v instanceof Set) return { $set: [...v].map(norm).sort() };
   if (Array.isArray(v)) return v.map(norm);
   if (v && typeof v === 'object') {
-    const o = {};
+    // null prototype: on a plain object, assigning the key "__proto__" sets the prototype and the member vanishes,
+    // so two different documents would share one canonical string
+    const o = Object.create(null);
     for (const k of Object.keys(v).sort()) if (v[k] !== undefined) o[k] = norm(v[k]);
     return o;
   }

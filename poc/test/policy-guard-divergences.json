@@ -118,6 +118,16 @@
     "envelope-shape/ceiling-equals-per-tx": {
       "status": "ABSTAINED",
       "reason": "the subject is the ceiling versus perTxMax relation; DepositX has no perTxMax"
+    },
+    "records/transfer-without-destination": {
+      "status": "DISAGREED",
+      "got": "DENY[DESTINATION_NOT_PERMITTED]",
+      "reason": "real difference, caused by hardening X1: signatures and the grant's envelope are checked before any account lookup (so an unauthenticated caller cannot probe which accounts exist), so a transfer with no destination is refused by the grant's counterparty list before the kernel notices the destination is not an account"
+    },
+    "envelopes/no-envelope": {
+      "status": "DISAGREED",
+      "got": "DENY[BAD_SIGNATURE]",
+      "reason": "real difference, caused by hardening X1: a signature naming a grant that does not exist is BAD_SIGNATURE, identical to a wrong key on a real grant, so a caller who cannot sign cannot enumerate grant ids; the other engine answers NO_ENVELOPE"
     }
   },
   "agreements_to_read_with_care": {

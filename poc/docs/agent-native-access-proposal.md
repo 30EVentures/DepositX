@@ -5,6 +5,8 @@ taken: full grants build, sub-delegation now, spend counted against every ancest
 below is the original proposal, kept as written; where the build differs, §10 says how and why.
 Follows Priority 5.1 (caller-type attribution).
 
+**Open proposal, not built:** §11 (X3) designs an institution-wide aggregate cap across sibling root grants.
+
 ## 10. Amendments made while implementing (read this first if you are comparing to the code)
 
 - **Grantable types** are `TRANSFER`, `PAYMENT`, `ESCROW_LOCK`, `ESCROW_REFUND`, `REGISTER_SWEEP`,
@@ -176,6 +178,8 @@ are the opposite: they gate authority (P6).** They must be exhaustively checked:
 - Window caps are per grant, not per institution: N sibling grants can sum to N × cap unless the
   parent's cap covers descendants (proposed: a sub-grant's spend counts against every ancestor's
   window — cheap to implement, needs a decision, see §8).
+  Spend under a *tree* is now bounded by its root (Priority 6), but separate root grants still share no
+  ceiling: measured, three roots with a $2,000 cap each moved $6,000 in one window. §11 (X3) proposes the fix.
 - Regulatory treatment of delegated software agents (outsourcing/third-party-risk classification,
   supervisory reporting of agent-initiated payments) is a question for counsel; nothing here asserts
   it. It extends the open question already added to `02` §10.
@@ -213,3 +217,139 @@ Independent of whether this is approved:
 - **6.2** `POST /api/submit`, `GET /api/schema`, `GET /api/grants`; dashboard shows grant headroom.
 - **6.3** Model checker: S6 plus the new actions; four mutation tests.
 - **6.4** Docs: README table row, "What it is NOT" update, invariant-charter entry with measured numbers.
+
+## 10. Amendments after the build
+
+- **Grant binding (roadmap 8.5, 2026-10-12).** The grant an agent signs under is now named inside the signed
+  digest (`grant`), mandatory for any instruction carrying an `agent:<grant_id>` signature, else `GRANT_MISMATCH`.
+  This closes a splice that sections 6 and 7 did not consider: with two grants sharing one agent key, the role
+  label alone chose the grant, so a relayer could move signed bytes onto the broader one. See
+  `grant-binding-proposal.md` and `invariant-charter.md`.
+
+---
+
+# 11. Proposal X3: an institution-wide aggregate cap (not built)
+
+Status: **proposal only, 2026-10-02, for review. No kernel code.** Follows Priorities 6 and 7. This is the
+"per grant, not per institution" limit §6 already names, worked into a design.
+
+## 11.1 The gap, measured
+
+§6 says window caps are per grant and that a sub-grant's spend counts against every ancestor, so a *tree*
+is bounded by its root. It stops there: **separate root grants have no common ancestor.** Only `ops:<issuer>`
+can create a root grant, so the institution can create as many as it likes, and each carries its own
+independent cap. Verified against the code rather than assumed: three root grants of the same issuer, each
+with a $2,000 window cap, moved **$6,000** in one window, six agent-signed transfers, no co-signature and no
+refusal. The institution's total agent-authorised outflow is therefore bounded by (number of live root
+grants) x (cap), and nothing in the kernel states or enforces a single number for it.
+
+What this does and does not protect against, stated up front so the proposal is not oversold:
+
+- **It bounds the blast radius of compromised or misconfigured agent keys.** An attacker holding several
+  agent keys, or an operator who minted a dozen overlapping roots, cannot move more than one auditable
+  figure per window.
+- **It gives a regulator or counterparty a single number**: "this institution's agents can move at most X per
+  window", independent of how many grants exist today or are created tomorrow.
+- **It does not protect against a compromised `ops:<issuer>` key.** That key can raise the cap, mint new
+  grants, or skip agents entirely and sign instructions itself. The cap bounds *agents*, not the institution.
+
+## 11.2 Options
+
+**Option A: a separate per-issuer counter.** Add an optional `budget: {window:{seconds,max_total}, win:{start,spent}}`
+to the issuer record. `#authorize` and `#runSweeps` check it in addition to the grant chain and charge it in
+addition to the chain. Smallest conceptual change, but it is **new accounting code in the same two places
+that already do the grant accounting**, i.e. a second implementation of "tumbling window, journaled, charged
+by instructions, batch legs and sweep firings" that can drift from the first. 7.1 was specifically careful to
+share one `#charge`/`#window` for exactly this reason.
+
+**Option B (recommended): the issuer budget is the implicit root of every chain.** Store the budget as a
+grant-shaped record (`{window, win, per_instruction_max: none}`) that `#chain()` appends as the final element
+of every grant chain *for that issuer*, when one is set. Every existing mechanism then applies unchanged:
+spend is already charged to every chain member (so sibling roots now share the top node), `#headroom` already
+takes the minimum over the chain (so sweep firings are bounded by it, including partial firing), windows are
+the same tumbling windows, escalation is the same ESCALATE path, and S6's chain walk covers it. Nothing is
+reimplemented. When no budget is set the chain is exactly what it is today, so **existing state, replay and
+every existing test are unchanged**. Costs: the synthetic node counts one level toward `MAX_GRANT_DEPTH` (5),
+so real chains lose one level unless the limit is raised to 6, and the record must be hidden or labelled in
+`GET /api/grants`.
+
+**Option C: static admission control at `GRANT` time.** Reject a new root grant if the sum of live roots' caps
+would exceed the budget. No runtime accounting at all. Rejected as the main design: windows have different
+lengths so "sum of caps" needs a lossy normalisation (per-day?), idle or expired roots still count unless
+the sum is recomputed, and it bounds what *could* be spent rather than what *was*. Cheap, though, and a
+reasonable stopgap if B's depth cost is unwelcome.
+
+## 11.3 Shape of Option B
+
+New instruction **`SET_AGENT_BUDGET`**, payload `{ issuer, window: {seconds, max_total} | null }`, signed by
+`ops:<issuer>`. It is **never grantable** (an agent can never touch its own ceiling, the same rule as
+`REVOKE_GRANT`): it is simply absent from `GRANTABLE_TYPES`, which is the deny-by-default list. `null` removes
+the budget. Rules, each chosen to match what the chain already does:
+
+- **Over the budget is ESCALATE, not DENY**: the instruction needs the institution's own `ops` signature as
+  well, exactly as one over a grant cap does today, and an escalated instruction does not consume the budget.
+- **Sweep firings charge it** through the shared `#charge`, and a suspended firing (7.1, X2) charges nothing.
+- **Escrow locks charge at lock; refunds do not credit back.** Conservative: the budget bounds outflow
+  *authorised*, not net outflow. See decision 4.
+- **Batch legs** each charge once, and a failing batch restores the counter, as the grant windows do.
+- **Lowering takes effect at once.** Raising is an authority widening and is also `ops`-signed; whether it
+  should take a second key or a delay is decision 2.
+
+## 11.4 Invariant and model-checker changes it would need
+
+**Invariants.** P1 to P5 and P7 are untouched: the budget moves no money and changes no balance. It extends
+**P6 (Authority)** with one clause: *in any one tumbling window, the sum of non-escalated agent-authorised
+outflow of an issuer, across all of its grants and sweep firings, never exceeds that issuer's budget.* This is
+the same shape as S6(a), lifted from a chain to the whole issuer.
+
+**New property S6(e), aggregate soundness.** Judged by the existing oracle style: it re-derives the rule from
+the block log and the model's own record of which grants exist, sharing no code with the kernel, and walks
+each action's blocks in order carrying what the action has already charged (as 7.1 does for sweep firings).
+
+**Model actions** (the delegation alphabet was 21 actions and exhausted at 1,767 states when this was written; it is now 25 actions and 12,478 states, so expect growth and
+possibly a deeper search or a larger cap; measure before promising exhaustion):
+a second root grant `g5` with its OWN key, sibling of `g1` (`g4` is already taken by the grant-binding actions: a root that shares `g1`'s key; `g3` is an attack-only
+sub-grant); `set budget MPL $3 / 86400 s`; `lower budget to $1`; `agent g5 transfer $2`; and the key attack,
+**`agent g1 transfer $2` then `agent g5 transfer $2`**, each inside its own cap, jointly over the budget, where
+the second must be refused without a co-signature; plus `ATTACK agent g1 signs SET_AGENT_BUDGET`, which must
+always be rejected.
+
+**Planted bugs the checker must catch** (written after the oracle, as in 6.3 and 7.1): the budget charged for
+only the first root grant of an issuer; sweep firings not charged to it; the counter not journaled (caught by
+S2 because it is part of compared state); money compared as strings; an escalated instruction consuming the
+budget in one path but not another.
+
+**Unchanged and to be re-confirmed**: the routine 40-action base model (3,793 / 40,680) and every existing
+delegation figure when no budget is set, which is the proof that B is additive.
+
+## 11.5 Honest limits
+
+- **Tumbling windows allow a burst of up to 2x the cap across a boundary** (spend at the end of one window and
+  the start of the next). Same property as every grant window; a sliding window is rejected as out of
+  proportion here.
+- **The cap bounds agents only**, as 11.1 says. It does not bound escalated spend (the institution approved it)
+  or direct `ops` instructions.
+- **It bounds value, not count.** A flood of tiny in-cap instructions is a separate (rate-limit) question.
+- **Currency**: integer CAD cents only, like everything else here.
+
+## 11.6 Decisions needed
+
+1. **Option B (recommended)**, A, or C as a stopgap? B's cost is one chain level; if that matters, raise
+   `MAX_GRANT_DEPTH` to 6 deliberately rather than let it shrink silently.
+2. **Who may change the budget**: `ops` alone (recommended for the PoC), or a raise needing a second key
+   (`gov:`) or a delay.
+3. **Optional or mandatory**: unset means unlimited, as today (recommended: additive, no migration), or a
+   mandatory default that every issuer must set.
+4. **Do escrow refunds credit the budget back?** Recommended no: simpler and strictly more conservative.
+5. **Should an escalated, co-signed instruction count?** Recommended no, matching §10's existing decision for
+   grant windows (the institution explicitly approved that one).
+
+## 11.7 Proposed roadmap items (not added to `ROADMAP.md`)
+
+- **X3.1** Spec and acceptance criteria into `ROADMAP.md`, unchecked; prototype check that all 209 tests pass
+  unmodified with no budget set.
+- **X3.2** `SET_AGENT_BUDGET`, the synthetic chain root, `GET /api/grants` presentation, error codes and
+  `schema()` entries.
+- **X3.3** Targeted tests first (including the three-roots case from 11.1, now refused), then implementation.
+- **X3.4** Model checker: `g5`, the budget actions, S6(e), five planted bugs; real numbers into the charter.
+- **X3.5** Docs: README row and limits, charter entry, this proposal marked implemented with amendments.

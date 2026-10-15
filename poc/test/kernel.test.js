@@ -16,7 +16,7 @@ const sp = (n, id) => n.ledger.s.issuers.get(id).sp;
 // everything except height/time/dedup: what "state unchanged" means for an atomic rejection
 const core = (n) => canon({ a: n.ledger.s.accounts, i: n.ledger.s.issuers, an: n.ledger.s.anchor, q: n.ledger.s.queue });
 
-test('bootstrap: network is live and every invariant holds', () => {
+test('bootstrap: the simulated network starts with every invariant holding', () => {
   const n = new Network();
   allOk(n);
   for (const id of ['MPL', 'NSR', 'LKS']) {
@@ -163,7 +163,7 @@ test('liquidity-saving netting: mutual payments that each exceed the position se
   allOk(n);
 });
 
-test('finality receipts verify offline; tampering is detected', () => {
+test('block receipts verify offline; tampering is detected', () => {
   const n = new Network();
   n.pay('MPL:acme', 'NSR:cedar', dollars(1));
   const b = n.blocks.at(-1);

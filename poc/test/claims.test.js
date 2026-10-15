@@ -184,12 +184,13 @@ export function collect() {
   const files = [];
   for (const f of walk(path.join(POC, 'src'), '.js')) files.push({ f, kind: 'js' });
   files.push({ f: path.join(POC, 'public', 'index.html'), kind: 'html' });
+  files.push({ f: path.join(POC, 'package.json'), kind: 'json' }); // the package description is what a registry or a listing shows
   files.push({ f: path.join(POC, 'README.md'), kind: 'md' });
   files.push({ f: path.join(REPO, 'README.md'), kind: 'md' });
   for (const f of walk(path.join(POC, 'docs'), '.md')) files.push({ f, kind: 'md' });
   return files.map(({ f, kind }) => {
     const text = fs.readFileSync(f, 'utf8');
-    const units = kind === 'js' ? jsStrings(text).flatMap((s) => sentences(s.text)) : kind === 'html' ? htmlUnits(text) : mdUnits(text);
+    const units = kind === 'js' ? jsStrings(text).flatMap((s) => sentences(s.text)) : kind === 'html' ? htmlUnits(text) : kind === 'json' ? sentences(String(JSON.parse(text).description || '')) : mdUnits(text);
     return { file: path.relative(REPO, f), units };
   });
 }

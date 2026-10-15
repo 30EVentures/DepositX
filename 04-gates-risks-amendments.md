@@ -19,6 +19,8 @@
 | **G3b** Acceptance | Sep 2030 | ≥99.99% over two full quarters after G3a (99.999% is the design target); ≥10% of defined eligible flow in the anchor use case among participating banks; fees cover ≥100% of run cost on the year-2 plan; independent PFMI assessment "observed" or "broadly observed" with plan; supervisory query <60 s in 4 unscripted tests; no unresolved Sev-1 | Availability <99.9%; fee coverage <70% with no path; regulator objection | Path A; Path B |
 | **G4** Expansion | Not before Oct 2030 | CDIC written confirmation; consumer-protection regime agreed; RTR interoperability assessed; ≥1 cross-border corridor under supervision; PQ hybrid signatures deployed | CDIC or regulators object; retail economics negative | Stay wholesale |
 
+**Consistency flag (2026-10-12, unresolved, for the Gate Committee):** the G0 thresholds on bank commitment disagree inside this document and with `01` §3.3. GO needs four or more banks, including two of the top three (`01` §3.3 item 1; Strategy). NO-GO is "fewer than 3 banks commit", which leaves three banks neither GO nor NO-GO. Kill trigger K3 (§3, measured at G0) says fewer than **five** founding issuers, or fewer than three of the six largest banks, means re-scope or halt, so a G0 that meets the GO test with exactly four banks also trips K3. `01` §3.3 item 5 asks for "six signed funding commitments" while item 1 needs four banks, and risk S4 in §4 says the wedge needs only 2–3 banks (the full register in `board/strategy-risk-challenge.md` §3 warns at fewer than 4 banks committed by G0). This file does not choose a number; the thresholds are a board decision.
+
 **Differences from the individual memos:** Strategy's G2 (Dec 2028) and G3 (Q4 2029) assumed an earlier live pilot; CFO's G2 was Sep 2029 on a later pilot. This plan puts capped live in Q2 2028, G2 in Q1 2029, all-founders production 30 Nov 2029 and acceptance Sep 2030. Gate criteria are the substance; dates move with the pilot start.
 
 ## 2. Scope-down paths
@@ -121,6 +123,8 @@ CFO's **pivots**: P1 lean operator (~60 FTE, outsourced 24/7 NOC, ~$39M/yr run c
 | "Sub-two-second" | "Median consensus finality Ys, p99 Zs, as of [date], on [load]." | Same | "Instant"; "lightning-fast" |
 | "Not a stablecoin" | "A deposit at a regulated bank, recorded on a shared ledger." | Same | "New digital currency" |
 | "Bearer-recorded claim" | Drop | | "Bearer" (an account-based deposit is not a bearer instrument) |
+
+**Claims flag (2026-10-12, unresolved, for the claims owner):** the "Approved wording now" cell for "Legal finality" reads "Reaches consensus finality in under two seconds (median, measured)", but nothing has been measured: the bake-off is only starting, and the proof of concept simulates its consensus in one process, so it supports no finality or latency wording of any kind. Under this section's own rule (no public claim without a claim ID and an evidence source) that sentence is usable only once a measurement exists; until then the "Sub-two-second" row's template ("Median consensus finality Ys, p99 Zs, as of [date], on [load]") is the safe form. The same cell appears in `board/strategy-risk-challenge.md` §6. This file does not change the approved wording.
 
 ## 8. Blueprint amendments (v0.9 → v1.0), consolidated
 
