@@ -87,6 +87,6 @@ test('positive control: a CAD instruction settles on the simulated DepositX netw
   const r = await routeInstruction({ instr: cad({ amount: dollars(100).toString() }), pinnedAgentPub: key.pubHex, network: n, book });
   assert.equal(r.ok, true, JSON.stringify(r)); assert.equal(r.finality, 'simulated');
   assert.equal(bal('MPL:acme'), before[0] - dollars(100)); assert.equal(bal('MPL:harbour'), before[1] + dollars(100));
-  assert.deepEqual(book.totalFor(RAIL_CAD), { rail: RAIL_CAD, unit: 'cad-cents', total: dollars(100).toString(), count: 1, finality: 'simulated' });
+  assert.deepEqual(book.totalFor(RAIL_CAD), { rail: RAIL_CAD, unit: 'cad-cents', total: dollars(100).toString(), count: 1, finality: 'simulated', kind: 'simulated-deposit-token' });
   assert.deepEqual(n.ledger.checkInvariants(n.ledger.s.time).violations, []);
 });

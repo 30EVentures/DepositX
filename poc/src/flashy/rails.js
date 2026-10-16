@@ -46,6 +46,13 @@ export function finalityLabel(rail) {
   return m[1] === '31337' ? 'simulated' : 'testnet';
 }
 
+/** What a line of this rail IS, in a fixed vocabulary. A stablecoin leg is never described as a bank deposit. */
+export function kindOf(rail) {
+  if (rail === RAIL_CAD) return 'simulated-deposit-token';
+  if (WDK_RAIL.test(rail)) return 'testnet-stablecoin-not-a-bank-deposit';
+  throw new RailError('UNKNOWN_RAIL', 'unknown rail');
+}
+
 /** Build a signed settlement instruction. The unit is derived from the rail, never supplied. */
 export function makeInstruction(agentKey, { instructionId, rail, amount, payer, payee, purpose = '', issuedAt }) {
   const unit = UNIT_OF(rail);
@@ -74,19 +81,22 @@ export function instructionProblem(instr, pinnedAgentPub) {
 
 /** Totals per rail. There is deliberately no method that adds across rails. */
 export class RailBook {
-  constructor() { this.byRail = new Map(); }
+  constructor() { this.byRail = new Map(); this.log = []; }
   record(rail, unit, amount, ref) {
     if (UNIT_OF(rail) !== unit) throw new RailError('UNIT_MISMATCH', 'unit does not belong to this rail');
     if (typeof amount !== 'string' || !AMOUNT.test(amount)) throw new RailError('BAD_AMOUNT', 'amount must be a canonical integer string');
     const e = this.byRail.get(rail) ?? { unit, total: 0n, count: 0, refs: new Set() };
     if (e.refs.has(ref)) throw new RailError('DUPLICATE_REF', 'already recorded');
     e.refs.add(ref); e.total += BigInt(amount); e.count += 1; this.byRail.set(rail, e);
+    this.log.push({ rail, unit, amount, ref, finality: finalityLabel(rail), kind: kindOf(rail) });
   }
+  /** Every recorded line, in order. Each carries its own rail, unit, finality label and kind. */
+  lines() { return this.log.map((l) => ({ ...l })); }
   /** The total for ONE rail, in that rail's own unit. */
   totalFor(rail) {
     if (!UNIT_OF(rail)) throw new RailError('UNKNOWN_RAIL', 'unknown rail');
     const e = this.byRail.get(rail);
-    return { rail, unit: UNIT_OF(rail), total: (e?.total ?? 0n).toString(), count: e?.count ?? 0, finality: finalityLabel(rail) };
+    return { rail, unit: UNIT_OF(rail), total: (e?.total ?? 0n).toString(), count: e?.count ?? 0, finality: finalityLabel(rail), kind: kindOf(rail) };
   }
   /** Reporting: one row per rail, never summed. */
   report() { return [...this.byRail.keys()].sort().map((r) => this.totalFor(r)); }
@@ -111,9 +121,9 @@ export async function routeInstruction({ instr, pinnedAgentPub, network, spendCl
     try { r = network.pay(instr.payer, instr.payee, BigInt(instr.amount), { instId: instr.instructionId }); } catch { return { ok: false, code: 'NETWORK_ERROR', rail: instr.rail }; }
     if (!r.ok) return { ok: false, code: r.error ?? 'REFUSED', rail: instr.rail, message: r.message };
     book.record(instr.rail, instr.unit, instr.amount, instr.instructionId);
-    return { ok: true, rail: instr.rail, finality, height: r.height };
+    return { ok: true, rail: instr.rail, unit: instr.unit, amount: instr.amount, kind: kindOf(instr.rail), finality, height: r.height };
   }
   if (typeof spendClient !== 'function') return { ok: false, code: 'NO_SPEND_CLIENT', rail: instr.rail };
   const decision = await spendClient(instr);
-  return { ok: decision?.verdict === 'ALLOW', rail: instr.rail, finality, decision };
+  return { ok: decision?.verdict === 'ALLOW', rail: instr.rail, unit: instr.unit, amount: instr.amount, kind: kindOf(instr.rail), finality, decision };
 }

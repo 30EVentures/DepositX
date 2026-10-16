@@ -38,6 +38,7 @@ const FILES = [
   ['poc README', 'poc/README.md', ALL],
   ['dashboard', 'poc/public/index.html', ALL],
   ['readiness notes', 'flashy/mesh/READINESS.md', ALL],
+  ['evidence story', 'flashy/mesh/EVIDENCE.md', ALL],
 ];
 for (const [name, file, required] of FILES) {
   test(`${name} keeps the whole disclaimer: ${required.join(', ')}`, () => { assert.deepEqual(missing(read(file), required), [], file); });

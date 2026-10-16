@@ -198,10 +198,10 @@ export function collect() {
   files.push({ f: path.join(REPO, 'README.md'), kind: 'md' });
   for (const f of walk(path.join(POC, 'docs'), '.md')) files.push({ f, kind: 'md' });
   // the mesh files at the repo root (charter, readiness notes) are published text too
-  const MESH_DIR = path.join(REPO, 'flashy', 'mesh');
-  if (fs.existsSync(MESH_DIR)) {
-    for (const f of walk(MESH_DIR, '.md')) files.push({ f, kind: 'md' });
-    for (const f of walk(MESH_DIR, '.json')) files.push({ f, kind: 'jsonstrings' });
+  for (const dir of [path.join(REPO, 'flashy', 'mesh'), path.join(REPO, 'flashy', 'hardening')]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const f of walk(dir, '.md')) files.push({ f, kind: 'md' });
+    for (const f of walk(dir, '.json')) files.push({ f, kind: 'jsonstrings' });
   }
   return files.map(({ f, kind }) => {
     const text = fs.readFileSync(f, 'utf8');
