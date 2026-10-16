@@ -9,6 +9,10 @@ import { fileURLToPath } from 'node:url';
 import { Network, confidentialView } from './network.js';
 import { bench } from './bench.js';
 import { samplePacs008 } from './iso20022.js';
+import { createReporter } from './flashy/mesh/reporter.js';
+import { attachMeshReporter } from './flashy/mesh/wire.js';
+import { meshRoute, modeGate, labelState } from './flashy/mesh/surface.js';
+import { validateAction } from './flashy/mesh/action-schema.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, '..', 'public');
@@ -22,6 +26,16 @@ const push = () => {
 };
 const watch = () => net.listeners.add(push);
 watch();
+
+// Mesh presence (FlashyOS): a no-op unless FLASHYOS_ORG_ID, FLASHYOS_AGENT_TOKEN and FLASHYOS_AGENT_NAME are all set. It reads
+// the network's halt flag and issuer statuses and sends a status plus one fixed label; it cannot change a block.
+const meshReporter = createReporter();
+let meshPresence = attachMeshReporter(net, { reporter: meshReporter });
+const rebindMeshPresence = () => { meshPresence.detach(); meshPresence = attachMeshReporter(net, { reporter: meshReporter }); };
+const sendRoute = (res, r) => {
+  res.writeHead(r.status, { 'content-type': r.type, 'cache-control': 'no-store', ...r.headers });
+  res.end(r.raw !== undefined ? r.raw : JSON.stringify(r.body));
+};
 
 const cents = (v) => {
   if (typeof v === 'number') v = String(v);
@@ -79,7 +93,7 @@ function act(b) {
     case 'batchDemo': return net.batch([payLeg(net, acct(b.from1), acct(b.to1), cents(b.amount1)), payLeg(net, acct(b.from2), acct(b.to2), cents(b.amount2))]);
     case 'batchEmpty': return net.batch([]);
     case 'batchNested': return net.batch([net.tx('BATCH', { legs: [payLeg(net, acct(b.from1), acct(b.to1), cents(b.amount1))] }, [])]);
-    case 'reset': net.listeners.clear(); net.store?.close(); net = new Network({ dataDir: DATA, fresh: true }); watch(); push(); return { ok: true, message: 'network reset to genesis' };
+    case 'reset': net.listeners.clear(); net.store?.close(); net = new Network({ dataDir: DATA, fresh: true }); watch(); rebindMeshPresence(); push(); return { ok: true, message: 'network reset to genesis' };
     default: return { ok: false, error: 'UNKNOWN_ACTION' };
   }
 }
@@ -94,17 +108,22 @@ http
   .createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     try {
+      // opt-in agent mode refuses the demo endpoints where the server signs for the caller; the mesh surface is read-only
+      const gated = modeGate({ method: req.method, pathname: url.pathname, env: process.env });
+      if (gated) return sendRoute(res, gated);
+      const mesh = meshRoute({ net, method: req.method, pathname: url.pathname, search: url.search, env: process.env });
+      if (mesh) return sendRoute(res, mesh);
       if (req.method === 'GET' && url.pathname === '/api/state') {
         // Roadmap 4.1 (M2 confidentiality): ?viewAs=<issuerId> shows that issuer's
         // own book only; anything else (including no parameter) is the supervisor's
         // full, unredacted view - today's default behaviour, unchanged.
         const viewAs = url.searchParams.get('viewAs');
         const viewer = viewAs && ['MPL', 'NSR', 'LKS'].includes(viewAs) ? { issuer: viewAs } : { supervisor: true };
-        return json(res, 200, confidentialView(net.snapshot(), viewer));
+        return json(res, 200, labelState(confidentialView(net.snapshot(), viewer)));
       }
       // Roadmap 6.2: the agent-facing interface. /api/schema and /api/grants are read-only;
       // /api/submit takes an instruction the CALLER signed - the server never signs on this path.
-      if (req.method === 'GET' && url.pathname === '/api/schema') return json(res, 200, Network.schema());
+      if (req.method === 'GET' && url.pathname === '/api/schema') return json(res, 200, labelState(Network.schema()));
       if (req.method === 'GET' && url.pathname === '/api/grants') {
         const iss = url.searchParams.get('issuer');
         if (iss && !['MPL', 'NSR', 'LKS'].includes(iss)) return json(res, 400, { ok: false, error: 'BAD_REQUEST', message: 'bad issuer' });
@@ -165,7 +184,10 @@ http
         });
         req.on('end', () => {
           try {
-            json(res, 200, act(JSON.parse(body || '{}')));
+            const action = JSON.parse(body || '{}');
+            const problems = validateAction(action); // closed schema: unknown kinds, fields and types are refused before anything runs
+            if (problems.length) return json(res, 400, { ok: false, error: 'BAD_REQUEST', message: 'not a valid action', problems });
+            json(res, 200, act(action));
           } catch (e) {
             json(res, 400, { ok: false, error: 'BAD_REQUEST', message: e.message });
           }
@@ -184,4 +206,4 @@ http
       json(res, 500, { ok: false, error: 'SERVER_ERROR', message: e.message });
     }
   })
-  .listen(PORT, '127.0.0.1', () => console.log(`DepositX PoC running at http://127.0.0.1:${PORT}` + (DATA ? ` (durable: ${DATA}, ${net.recovered ? 'recovered ' + net.recovered.blocks + ' blocks' : 'new'})` : ' (in memory)')));
+  .listen(PORT, '127.0.0.1', () => console.log(`DepositX PoC running at http://127.0.0.1:${PORT}` + (DATA ? ` (durable: ${DATA}, ${net.recovered ? 'recovered ' + net.recovered.blocks + ' blocks' : 'new'})` : ' (in memory)') + `; mesh presence ${meshPresence.configured ? 'on' : 'off'}; ${process.env.DEPOSITX_MODE === undefined || process.env.DEPOSITX_MODE === 'demo' ? 'demo' : 'agent'} mode`));

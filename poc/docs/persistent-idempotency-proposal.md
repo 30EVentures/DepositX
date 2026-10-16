@@ -129,7 +129,7 @@ before it were.
   for one logical instruction; whatever the caller does outside is its own problem.
 - **It cannot save a caller that loses its id.** A retry must reuse the same id and the same bytes.
 - **The ceiling is a retention decision, not a technical one.** How long an institution must be able to prove
-  "this id was already settled" is a question for counsel and operations, not for this document.
+  "this id was already processed" is a question for counsel and operations, not for this document.
 - **State growth is bounded, not free.** Horizon x acceptance rate, per validator. Size it before choosing a
   ceiling.
 

@@ -1,0 +1,37 @@
+{
+  "aao": "0.1",
+  "name": "DepositX",
+  "slug": "depositx",
+  "description": "Proof-of-concept model of par, atomic settlement between banks' deposit tokens. Consensus is simulated in one process, there is no bank partner, and it is not regulated, not final and not live.",
+  "accountableTo": "30eventures@gmail.com",
+  "escalation": "settlement-model",
+  "roles": [
+    {
+      "name": "settlement-model",
+      "family": "finance",
+      "purpose": "Models par, atomic cross-bank settlement on a simulated network so its invariants can be tested and its block log replayed.",
+      "measure": "Retained simulated blocks that replay from genesis to the same block hash and state root, as a share of retained simulated blocks",
+      "capabilities": [
+        "simulate",
+        "replay"
+      ],
+      "humanApprovalAtOrAbove": "HIGH"
+    },
+    {
+      "name": "risk-control",
+      "family": "risk",
+      "purpose": "Checks four state invariants at the end of every simulated block and halts the simulated network, or quarantines one issuer, when one breaks; the structural rules (par legs, signatures) refuse the offending instruction.",
+      "measure": "State invariant checks (P1, P2, P4, P5) that pass, as a share of checks run, over the retained simulated blocks",
+      "capabilities": [
+        "monitor",
+        "halt"
+      ],
+      "humanApprovalAtOrAbove": "HIGH"
+    }
+  ],
+  "network": {
+    "offers": [
+      "settlement-model"
+    ]
+  }
+}

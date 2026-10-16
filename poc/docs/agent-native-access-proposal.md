@@ -190,7 +190,7 @@ Independent of whether this is approved:
 
 - **F1 — 5.1 gap (real bug candidate).** `tx_PAYMENT`'s queue entry rebuilds the stored transaction
   without `caller` (`src/kernel.js`, the `j.field(this.s, 'queue', …)` line). A payment that is queued
-  for liquidity and later settled by `NET_CYCLE` loses its agent attribution in stored state, and its
+  for liquidity and later settled in the simulated network by `NET_CYCLE` loses its agent attribution in stored state, and its
   settlement is attributed to the operator's `NET_CYCLE` instruction. 5.1's tests didn't exercise
   queued payments. Small TDD fix; should be done regardless.
 - **F2 — stale comment.** The header of `src/kernel.js` still says "Nothing here distinguishes who is

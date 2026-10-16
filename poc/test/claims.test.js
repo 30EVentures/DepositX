@@ -38,6 +38,7 @@ export const TERMS = [
   { id: 'approved by', re: /\bapproved by\b/i },
   { id: 'insured', re: /\binsured\b/i },
   { id: 'guaranteed', re: /\bguarantee(s|d)?\b/i },
+  { id: 'settled', re: /\bsettled\b/i }, // "settled" is a finality word; it must say simulated (hardening phase 0.2)
 ];
 // A sentence carrying one of these is saying what the PoC is NOT, or that it is simulated. Reviewed list: widen it
 // only with a reason, because every word added makes the test easier to satisfy.
@@ -179,6 +180,14 @@ function walk(dir, ext) {
   return out;
 }
 
+/** Every string value in a JSON document, as sentence units (keys are not prose). */
+function jsonStringUnits(v) {
+  if (typeof v === 'string') return sentences(v);
+  if (Array.isArray(v)) return v.flatMap(jsonStringUnits);
+  if (v && typeof v === 'object') return Object.values(v).flatMap(jsonStringUnits);
+  return [];
+}
+
 /** Everything that is scanned: [{ file (repo-relative), units: [string] }]. */
 export function collect() {
   const files = [];
@@ -188,9 +197,15 @@ export function collect() {
   files.push({ f: path.join(POC, 'README.md'), kind: 'md' });
   files.push({ f: path.join(REPO, 'README.md'), kind: 'md' });
   for (const f of walk(path.join(POC, 'docs'), '.md')) files.push({ f, kind: 'md' });
+  // the mesh files at the repo root (charter, readiness notes) are published text too
+  for (const dir of [path.join(REPO, 'flashy', 'mesh'), path.join(REPO, 'flashy', 'hardening')]) {
+    if (!fs.existsSync(dir)) continue;
+    for (const f of walk(dir, '.md')) files.push({ f, kind: 'md' });
+    for (const f of walk(dir, '.json')) files.push({ f, kind: 'jsonstrings' });
+  }
   return files.map(({ f, kind }) => {
     const text = fs.readFileSync(f, 'utf8');
-    const units = kind === 'js' ? jsStrings(text).flatMap((s) => sentences(s.text)) : kind === 'html' ? htmlUnits(text) : kind === 'json' ? sentences(String(JSON.parse(text).description || '')) : mdUnits(text);
+    const units = kind === 'js' ? jsStrings(text).flatMap((s) => sentences(s.text)) : kind === 'html' ? htmlUnits(text) : kind === 'json' ? sentences(String(JSON.parse(text).description || '')) : kind === 'jsonstrings' ? jsonStringUnits(JSON.parse(text)) : mdUnits(text);
     return { file: path.relative(REPO, f), units };
   });
 }
