@@ -274,6 +274,12 @@ export class Ledger {
   #window(g, time) {
     return g.win.spent === 0n || time >= g.win.start + g.window.seconds ? { start: time, spent: 0n } : g.win;
   }
+  // The hard window (option C): counts ALL agent-authorised outflow of a grant, in the envelope or co-signed alike. Same
+  // length as the soft window; absent unless the grant has a hard_window_max.
+  #hwindow(g, time) {
+    const h = g.hwin;
+    return !h || h.spent === 0n || time >= h.start + g.window.seconds ? { start: time, spent: 0n } : h;
+  }
   // Stands in for `need(sig(ops:<issuerId>))` on grantable handlers. With no agent signature it IS that
   // check, unchanged. With `agent:<grant_id>`: verify the agent key, derive the caller, then grade the
   // instruction against the grant - ALLOW (consume window), ESCALATE (also needs the institution's own
@@ -312,6 +318,14 @@ export class Ledger {
     need(leaf.allow_types.includes(tx.type), 'ENVELOPE_DENIED', `grant ${gid} does not allow ${tx.type}`);
     if (leaf.counterparties) for (const a of accounts) need(leaf.counterparties.includes(a), 'ENVELOPE_DENIED', `grant ${gid} may not touch ${a}`);
     const amt = amount ? amount() : null;
+    // The hard tier (option C) is checked first and down the whole chain: above it no signature, the institution's
+    // included, can authorise the instruction on the agent path.
+    if (amt !== null) {
+      for (const c of chain) {
+        need(!(c.hard_max !== undefined && amt > c.hard_max), 'ENVELOPE_EXCEEDED', `above grant ${c.id}'s hard limit: no co-signature can authorise it`);
+        need(!(c.hard_window_max !== undefined && this.#hwindow(c, time).spent + amt > c.hard_window_max), 'ENVELOPE_EXCEEDED', `grant ${c.id}'s hard window is used up: no co-signature can authorise it`);
+      }
+    }
     let over = false;
     if (amt !== null) {
       if (amt > leaf.per_instruction_max) over = true;
@@ -320,17 +334,20 @@ export class Ledger {
     if (over) {
       need(tx.sigs[`ops:${issuerId}`], 'ESCALATION_REQUIRED', `outside grant ${gid}'s envelope: needs the ${issuerId} ops signature as well`);
       this.#sig(tx, `ops:${issuerId}`);
-      return; // institution-authorised: does not consume the window
+      this.#charge(chain, amt, time, j, { soft: false }); // institution-authorised: not charged to the soft window, but counted by the hard one
+      return;
     }
     if (amt !== null) this.#charge(chain, amt, time, j);
   }
   // Charge `amt` to every grant in the chain's own window. One place for both instructions and sweep
   // firings, so the two can never disagree about how a window turns over. `j` is omitted at end-of-block,
   // which has no journal (nothing at end-of-block can fail after this point).
-  #charge(chain, amt, time, j) {
+  #charge(chain, amt, time, j, { soft = true } = {}) {
     for (const c of chain) {
-      const w = this.#window(c, time);
-      const rec = { ...c, win: { start: w.start, spent: w.spent + amt } };
+      const rec = { ...c };
+      if (soft) { const w = this.#window(c, time); rec.win = { start: w.start, spent: w.spent + amt }; }
+      if (c.hard_window_max !== undefined) { const h = this.#hwindow(c, time); rec.hwin = { start: h.start, spent: h.spent + amt }; }
+      if (rec.win === c.win && rec.hwin === c.hwin) continue; // nothing to record for this link
       if (j) j.set(this.s.grants, c.id, rec);
       else this.s.grants.set(c.id, rec);
     }
@@ -341,6 +358,7 @@ export class Ledger {
     for (const c of chain) {
       const left = c.window.max_total - this.#window(c, time).spent;
       if (left < room) room = left;
+      if (c.hard_window_max !== undefined) { const hleft = c.hard_window_max - this.#hwindow(c, time).spent; if (hleft < room) room = hleft; }
     }
     return room < 0n ? 0n : room;
   }
@@ -907,6 +925,12 @@ export class Ledger {
     const max = parseAmount(p.per_instruction_max, 'GRANT_BAD_AMOUNT');
     need(Number.isSafeInteger(p.window.seconds) && p.window.seconds >= 1 && p.window.seconds <= MAX_WINDOW_S, 'GRANT_BAD_WINDOW');
     const cap = parseAmount(p.window.max_total, 'GRANT_BAD_AMOUNT');
+    // optional hard tier (option C): canonical cents, never below the soft cap it sits above
+    const hardMax = p.hard_max === undefined ? undefined : parseAmount(p.hard_max, 'GRANT_BAD_AMOUNT');
+    const hardWin = p.hard_window_max === undefined ? undefined : parseAmount(p.hard_window_max, 'GRANT_BAD_AMOUNT');
+    need(hardMax === undefined || hardMax >= max, 'GRANT_BAD_AMOUNT', 'hard_max must not be below per_instruction_max');
+    need(hardWin === undefined || hardWin >= cap, 'GRANT_BAD_AMOUNT', 'hard_window_max must not be below the window cap');
+    need(hardMax === undefined || hardWin === undefined || hardMax <= hardWin, 'GRANT_BAD_AMOUNT', 'hard_max must not exceed hard_window_max: one instruction cannot be larger than its window');
     const cps = p.counterparties === undefined || p.counterparties === null ? null : p.counterparties;
     need(cps === null || (Array.isArray(cps) && cps.length > 0 && cps.every((a) => typeof a === 'string' && ACCT_RE.test(a))), 'GRANT_BAD_COUNTERPARTIES');
     const types = [...new Set(p.allow_types)].sort();
@@ -917,6 +941,8 @@ export class Ledger {
         || max > par.per_instruction_max
         || cap > par.window.max_total
         || p.not_after > par.not_after
+        || (hardMax !== undefined && par.hard_max !== undefined && hardMax > par.hard_max)
+        || (hardWin !== undefined && par.hard_window_max !== undefined && hardWin > par.hard_window_max)
         || (par.counterparties !== null && (cpList === null || !cpList.every((a) => par.counterparties.includes(a))));
       need(!widens, 'GRANT_WIDENS_PARENT', 'a sub-grant may only narrow its parent');
     }
@@ -924,6 +950,8 @@ export class Ledger {
       id: p.grant_id, issuer: iss.id, agentKey: p.agent_key, label: p.label || '', parent: parentId,
       allow_types: types, per_instruction_max: max, window: { seconds: p.window.seconds, max_total: cap },
       counterparties: cpList, not_after: p.not_after, revoked: false, win: { start: 0, spent: 0n },
+      ...(hardMax !== undefined ? { hard_max: hardMax } : {}),
+      ...(hardWin !== undefined ? { hard_window_max: hardWin, hwin: { start: 0, spent: 0n } } : {}),
     });
     events.push({ type: 'GRANT_CREATED', grantId: p.grant_id, issuer: iss.id, parent: parentId });
   }
@@ -1269,11 +1297,13 @@ export class Ledger {
       return { live: false, reason: e.code, remaining_window: 0n };
     }
     let rem = null;
+    let hrem = null;
     for (const c of chain) {
       const left = c.window.max_total - this.#window(c, time).spent;
       if (rem === null || left < rem) rem = left;
+      if (c.hard_window_max !== undefined) { const hl = c.hard_window_max - this.#hwindow(c, time).spent; if (hrem === null || hl < hrem) hrem = hl; }
     }
-    return { live: true, reason: null, remaining_window: rem < 0n ? 0n : rem };
+    return { live: true, reason: null, remaining_window: rem < 0n ? 0n : rem, remaining_hard_window: hrem === null ? 0n : hrem < 0n ? 0n : hrem };
   }
 
   // ---------------------------------------------------------------- views

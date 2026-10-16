@@ -32,6 +32,7 @@ const isA = (a) => a.startsWith('MPL');
 function snapshotAll(net) {
   return {
     s: structuredClone(net.ledger.s),
+    oh: structuredClone(net.__oh ?? {}), // the oracle's own hard-window record (option C); empty unless a hard tier is in play
     banks: Object.fromEntries(Object.entries(net.banks).map(([k, b]) => [k, b.snapshot()])),
     tasks: structuredClone(net.coreTasks),
     paused: net.corePaused,
@@ -43,6 +44,7 @@ function restoreAll(net, snap) {
   for (const [k, b] of Object.entries(snap.banks)) net.banks[k].restore(b);
   net.coreTasks = structuredClone(snap.tasks);
   net.corePaused = snap.paused;
+  net.__oh = structuredClone(snap.oh ?? {});
   net.blocks = [];
   net.log = [];
 }
@@ -60,7 +62,8 @@ function key(net) {
     paused: net.corePaused,
     escrows: [...net.ledger.s.escrows].map(([k, v]) => [k, v.from, v.to, v.amount, v.eventName]),
     sweeps: [...net.ledger.s.sweeps].map(([k, v]) => [k, v.from, v.to, v.keep]),
-    grants: [...net.ledger.s.grants].map(([k, v]) => [k, v.revoked, v.win.spent]),
+    grants: [...net.ledger.s.grants].map(([k, v]) => [k, v.revoked, v.win.spent, ...(v.hwin ? [v.hwin.spent] : [])]),
+    ...(net.__oh && Object.keys(net.__oh).length ? { oh: net.__oh } : {}),
   });
 }
 // state as the safety properties see it (no ids)
@@ -83,11 +86,13 @@ const totalMoney = (net) => {
 // (max $10 / cap $10): the precondition of the same-holder splice. Signed bytes must never move from g1 onto g4.
 const GK = { g1: genKey(), g2: genKey(), g3: genKey() };
 GK.g4 = GK.g1;
-const TOPO = { g1: null, g2: 'g1', g3: 'g1', g4: null };
+GK.g5 = genKey(); // g5: a root grant with a HARD tier (option C): soft $1 / $1, hard $2 per instruction / $3 per window
+const TOPO = { g1: null, g2: 'g1', g3: 'g1', g4: null, g5: null };
 const SWEEP_OWNER = { s9: 'g1' }; // the sweep only g1's agent ever registers (the institution's own is s1)
 const G1 = { grantId: 'g1', issuer: 'MPL', label: 'model agent', allowTypes: ['TRANSFER', 'PAYMENT', 'GRANT', 'REGISTER_SWEEP', 'CANCEL_SWEEP'], perInstructionMax: dollars(2), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g1 };
 const G2 = { grantId: 'g2', issuer: 'MPL', label: 'sub agent', parent: 'g1', allowTypes: ['TRANSFER', 'CANCEL_SWEEP'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(2) }, key: GK.g2 };
 const G4 = { grantId: 'g4', issuer: 'MPL', label: 'broad agent sharing g1\'s key', allowTypes: ['TRANSFER'], perInstructionMax: dollars(10), window: { seconds: 86400, maxTotal: dollars(10) }, key: GK.g4 };
+const G5 = { grantId: 'g5', issuer: 'MPL', label: 'hard-tier agent', allowTypes: ['TRANSFER'], perInstructionMax: dollars(1), window: { seconds: 86400, maxTotal: dollars(1) }, hardMax: dollars(2), hardWindowMax: dollars(3), key: GK.g5 };
 const agentXfer = (net, gid, amt, opts) => net.submitSigned(net.agentTx(gid, 'TRANSFER', { from: 'MPL:acme', to: 'MPL:harbour', amount: dollars(amt).toString() }, ['screen:MPL'], opts));
 const agentPay = (net, gid, amt) => net.submitSigned(net.agentTx(gid, 'PAYMENT', { from: 'MPL:acme', to: 'NSR:cedar', amount: dollars(amt).toString(), queueIfShort: false }, ['screen:MPL', 'accept:NSR']));
 
@@ -134,6 +139,18 @@ export const DELEGATION_ACTIONS = [
   { name: 'ATTACK sub-grant g3 under g1 adding ESCROW_LOCK', kind: 'attack', run: (net) => net.grantAgent({ ...G2, grantId: 'g3', key: GK.g3, allowTypes: ['TRANSFER', 'ESCROW_LOCK'] }) },
 ];
 
+// Option C (hard tier): g5 is soft $1 / $1 and hard $2 per instruction / $3 per window (the two hard limits differ so each is exercised alone). Kept in its OWN alphabet (HARD_TIER_MODEL below) so the
+// delegation search above keeps its exhaustive numbers: co-signed spends between soft and hard are fine, nothing above
+// the hard cap is ever accepted, and the hard WINDOW counts co-signed spends too ($2 co-signed twice must refuse the second).
+export const HARD_TIER_ACTIONS = [
+  { name: 'grant g5 (soft $1/$1, hard $2 per instruction / $3 per window)', kind: 'legit', run: (net) => net.grantAgent(G5) },
+  { name: 'agent g5 transfer acme->harbour $1', kind: 'legit', run: (net) => agentXfer(net, 'g5', 1) },
+  { name: 'agent g5 transfer $2 co-signed (between soft and hard)', kind: 'legit', run: (net) => agentXfer(net, 'g5', 2, { escalate: true }) },
+  { name: 'ATTACK agent g5 transfer $3 co-signed (above the hard cap)', kind: 'attack', run: (net) => agentXfer(net, 'g5', 3, { escalate: true }) },
+  { name: 'ATTACK agent g5 transfer $3 without the co-signature (hard answer first)', kind: 'attack', run: (net) => agentXfer(net, 'g5', 3) },
+  { name: 'revoke g5 (institution)', kind: 'legit', run: (net) => net.revokeGrant('g5') },
+];
+
 // The S6 oracle. Deliberately re-derives the rules from the spec in docs/agent-native-access-proposal.md
 // instead of calling the kernel, so a kernel bug cannot hide behind itself.
 const AMOUNT_TYPES = new Set(['TRANSFER', 'PAYMENT', 'ESCROW_LOCK']);
@@ -158,7 +175,9 @@ function checkDelegation(pre, net) {
   // (instructions, batch legs and sweep firings alike), on top of the pre-state window, so a second leg or a
   // firing is judged against what the first one left, computed here and not read back from the kernel.
   const used = new Map();
+  const hUsed = new Map(); // hard window usage by this action's blocks, co-signed spends included (option C)
   const spentAt = (l, time) => (l.win.spent === 0n || time >= l.win.start + l.window.seconds ? 0n : l.win.spent) + (used.get(l.id) || 0n);
+  const hSpentAt = (l, time) => (l.hwin && l.hwin.spent !== 0n && time < l.hwin.start + l.window.seconds ? l.hwin.spent : 0n) + (hUsed.get(l.id) || 0n);
   const chainOf = (gid) => {
     const chain = [];
     for (let c = gid; c; c = TOPO[c]) chain.push(pre.grants.get(c));
@@ -210,8 +229,17 @@ function checkDelegation(pre, net) {
       if (!c || c.kind !== 'agent' || c.grant_id !== gid) out.push(`accepted ${tx.type} under ${gid} but recorded caller ${JSON.stringify(c)}`);
     }
     if (!AMOUNT_TYPES.has(tx.type)) return;
-    if (tx.sigs[`ops:${leaf.issuer}`]) return; // institution co-signed: escalated, outside the envelope by design, and not charged
     const amt = BigInt(tx.payload.amount);
+    // S6(g), hard tier: nothing above any link's hard limit is ever accepted on the agent path, co-signed or not, and the
+    // hard window counts every accepted spend in the chain
+    for (const l of chain) {
+      if (l.hard_max !== undefined && amt > l.hard_max) out.push(`accepted ${amt} cents under ${gid}, above ${l.id}'s hard limit`);
+      if (l.hard_window_max !== undefined) {
+        if (hSpentAt(l, time) + amt > l.hard_window_max) out.push(`accepted ${amt} cents under ${gid}, over ${l.id}'s hard window`);
+        hUsed.set(l.id, (hUsed.get(l.id) || 0n) + amt);
+      }
+    }
+    if (tx.sigs[`ops:${leaf.issuer}`]) return; // institution co-signed: escalated, outside the soft envelope by design, and not charged to it
     if (amt > leaf.per_instruction_max) out.push(`accepted ${amt} cents under ${gid} above its per-instruction max without the institution signature`);
     for (const l of chain) {
       if (spentAt(l, time) + amt > l.window.max_total) out.push(`accepted ${amt} cents under ${gid}, over ${l.id}'s window cap, without the institution signature`);
@@ -248,9 +276,43 @@ function checkDelegation(pre, net) {
         if (!l) continue;
         if (spentAt(l, time) + a > l.window.max_total) out.push(`sweep ${f.sweepId} moved ${a} cents, over ${l.id}'s window cap`);
         used.set(l.id, (used.get(l.id) || 0n) + a);
+        if (l.hard_window_max !== undefined) {
+          if (hSpentAt(l, time) + a > l.hard_window_max) out.push(`sweep ${f.sweepId} moved ${a} cents, over ${l.id}'s hard window`);
+          hUsed.set(l.id, (hUsed.get(l.id) || 0n) + a);
+        }
       }
     }
   });
+  // S6(g), independent of the kernel's own counters: keep OUR OWN tumbling hard windows (carried in the model state as
+  // net.__oh, and part of the state key) from every accepted agent spend and sweep this action produced. A kernel that
+  // forgets to count a (co-signed) spend in its hard window agrees with itself, so only an oracle that never reads the
+  // kernel's counter can see the overspend.
+  if ([...post.grants.values()].some((g) => g.hard_window_max !== undefined)) {
+    const oh = net.__oh ?? (net.__oh = {});
+    const spend = (linkId, amt, time, label) => {
+      const l = post.grants.get(linkId);
+      if (!l || l.hard_window_max === undefined) return;
+      let w = oh[linkId];
+      if (!w || w.spent === 0n || time >= w.start + l.window.seconds) w = { start: time, spent: 0n };
+      w = { start: w.start, spent: w.spent + amt }; oh[linkId] = w;
+      if (w.spent > l.hard_window_max) out.push(`${label} took ${linkId}'s hard window to ${w.spent} cents, above its cap ${l.hard_window_max}`);
+    };
+    net.log.forEach((entry, i) => {
+      const blk = net.blocks[i];
+      if (!blk) return;
+      entry.txs.forEach((tx, k) => {
+        const r = blk.results[k];
+        if (!r || !r.ok || !tx || !tx.sigs || !AMOUNT_TYPES.has(tx.type) || !tx.payload) return;
+        const role = Object.keys(tx.sigs).find((x) => x.startsWith('agent:'));
+        if (!role) return;
+        for (let c = role.slice(6); c; c = TOPO[c]) spend(c, BigInt(tx.payload.amount), blk.header.time, `${tx.type} by ${role.slice(6)}`);
+      });
+      for (const f of blk.sweepFires || []) {
+        if (!f.grant || f.suspended || f.amount === '0') continue;
+        for (let c = f.grant; c; c = TOPO[c]) spend(c, BigInt(f.amount), blk.header.time, `sweep ${f.sweepId}`);
+      }
+    });
+  }
   return out;
 }
 
@@ -319,6 +381,7 @@ export const ACTIONS = [...BASE_ACTIONS, ...DELEGATION_ACTIONS];
 // A small alphabet for the delegation properties alone: funding, the grant lifecycle and agent
 // instructions. Keeps the reachable space small enough to search deep (a delegation counterexample
 // needs mint, mint, grant, sub-grant, revoke, use = six steps), which the full alphabet's state cap cannot.
+export const HARD_TIER_MODEL = [...BASE_ACTIONS.filter((x) => /^(mint MPL:acme|fund MPL)/.test(x.name)), ...HARD_TIER_ACTIONS];
 export const DELEGATION_MODEL = [...BASE_ACTIONS.filter((a) => /^(mint MPL:acme|fund MPL)/.test(a.name)), ...DELEGATION_ACTIONS];
 
 export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {}, actions = BASE_ACTIONS } = {}) {
@@ -410,7 +473,7 @@ export function modelCheck({ maxDepth = 6, maxStates = 40000, log = () => {}, ac
 if (process.argv[1] && process.argv[1].endsWith('modelcheck.js')) {
   const depth = Number(process.argv[2]) || 6;
   const t0 = Date.now();
-  const r = modelCheck({ maxDepth: depth, log: console.log, actions: process.argv[3] === 'all' ? ACTIONS : process.argv[3] === 'delegation' ? DELEGATION_MODEL : BASE_ACTIONS });
+  const r = modelCheck({ maxDepth: depth, log: console.log, actions: process.argv[3] === 'all' ? ACTIONS : process.argv[3] === 'delegation' ? DELEGATION_MODEL : process.argv[3] === 'hardtier' ? HARD_TIER_MODEL : BASE_ACTIONS });
   console.log(JSON.stringify({ ...r, seconds: +((Date.now() - t0) / 1000).toFixed(1) }, null, 2));
   process.exit(r.failures.length ? 1 : 0);
 }

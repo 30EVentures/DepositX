@@ -41,10 +41,6 @@ export const abstain = (reason) => ({ abstain: reason });
 
 // Cases whose subject is a concept DepositX has no field for. Keyed by `<set>/<id>`; the reason is ours.
 const NOT_MODELLED = {
-  'envelope-shape/cap-is-a-number': 'subject is perTxMax; a DepositX grant has no hard per-instruction ceiling to validate',
-  'envelope-shape/per-tx-above-daily': 'subject is the perTxMax/dailyMax relation; a DepositX grant has no perTxMax',
-  'envelope-shape/ceiling-above-per-tx': 'subject is the autoApproveMax/perTxMax relation; a DepositX grant has no perTxMax',
-  'envelope-shape/ceiling-equals-per-tx': 'subject is the autoApproveMax/perTxMax relation; a DepositX grant has no perTxMax',
 };
 
 // Kernel error code -> the closest code in the other vocabulary. Anything not listed passes through
@@ -55,6 +51,7 @@ function translate(error, message = '') {
     case 'UNKNOWN_ACCOUNT': return 'INVALID_RECORD'; // the adapter only ever sends a non-account for a missing/non-string destination
     case 'UNKNOWN_GRANT': return 'NO_ENVELOPE';
     case 'GRANT_REVOKED': return 'ENVELOPE_INACTIVE';
+    case 'ENVELOPE_EXCEEDED': return /hard window/.test(message) ? 'DAILY_CAP' : 'PER_TX_CAP'; // option C: the hard tier refuses, whoever signs
     case 'ENVELOPE_DENIED': return /may not touch/.test(message) ? 'DESTINATION_NOT_PERMITTED' : 'KIND_NOT_PERMITTED';
     default: return error;
   }
@@ -66,8 +63,10 @@ function grantPayload(env, accountOf, now) {
   const dests = Array.isArray(env.destinations) ? env.destinations : null;
   return {
     allow_types: allowTypes,
-    per_instruction_max: env.autoApproveMax,
+    per_instruction_max: env.autoApproveMax, // the soft ceiling: above it the institution must co-sign (ESCALATE)
+    hard_max: env.perTxMax, // the hard per-transaction cap: above it nothing can authorise (DENY)
     window: { seconds: DAY, max_total: env.dailyMax },
+    hard_window_max: env.dailyMax, // the daily cap is a hard cap in the other vocabulary
     // the kernel checks every account an instruction touches, the payer's own included
     counterparties: dests && dests.length ? [...new Set([FROM, ...dests.map(accountOf)])] : null,
     not_after: now + DAY,

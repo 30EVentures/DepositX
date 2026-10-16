@@ -66,7 +66,7 @@ test('REFUSAL: a suspended or empty sweep is not BUILDING, and a non-authorizati
 });
 
 test('every authorization refusal the kernel can give is recognised', () => {
-  for (const code of ['BAD_SIGNATURE', 'MISSING_SIGNATURE', 'ESCALATION_REQUIRED', 'ENVELOPE_DENIED', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_MISMATCH', 'GRANT_WRONG_ISSUER', 'CALLER_MISMATCH', 'UNKNOWN_GRANT', 'REVOKE_NOT_AUTHORISED', 'SWEEP_WRONG_GRANT', 'ESCROW_WRONG_GRANT', 'MULTIPLE_AGENT_SIGS']) assert.ok(AUTH_REFUSALS.has(code), code);
+  for (const code of ['BAD_SIGNATURE', 'MISSING_SIGNATURE', 'ESCALATION_REQUIRED', 'ENVELOPE_DENIED', 'ENVELOPE_EXCEEDED', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_MISMATCH', 'GRANT_WRONG_ISSUER', 'CALLER_MISMATCH', 'UNKNOWN_GRANT', 'REVOKE_NOT_AUTHORISED', 'SWEEP_WRONG_GRANT', 'ESCROW_WRONG_GRANT', 'MULTIPLE_AGENT_SIGS']) assert.ok(AUTH_REFUSALS.has(code), code);
 });
 
 test('REFUSAL: a flood of refused instructions sends at most one REVIEWING heartbeat per interval', async () => {
