@@ -15,7 +15,7 @@ export const TASKS = Object.freeze({
 
 // Refusals that mean "a caller was not authorised" (a signature, a grant, an envelope). A refusal for any other reason
 // (funds, caps, duplicates, validity) is an ordinary block, not a review.
-export const AUTH_REFUSALS = new Set(['BAD_SIGNATURE', 'MISSING_SIGNATURE', 'ESCALATION_REQUIRED', 'ENVELOPE_DENIED', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_MISMATCH', 'GRANT_WRONG_ISSUER', 'CALLER_MISMATCH', 'UNKNOWN_GRANT', 'REVOKE_NOT_AUTHORISED', 'SWEEP_WRONG_GRANT', 'ESCROW_WRONG_GRANT', 'MULTIPLE_AGENT_SIGS']);
+export const AUTH_REFUSALS = new Set(['BAD_SIGNATURE', 'MISSING_SIGNATURE', 'ESCALATION_REQUIRED', 'ENVELOPE_DENIED', 'ENVELOPE_EXCEEDED', 'GRANT_REVOKED', 'GRANT_EXPIRED', 'GRANT_MISMATCH', 'GRANT_WRONG_ISSUER', 'CALLER_MISMATCH', 'UNKNOWN_GRANT', 'REVOKE_NOT_AUTHORISED', 'SWEEP_WRONG_GRANT', 'ESCROW_WRONG_GRANT', 'MULTIPLE_AGENT_SIGS']);
 
 /** The phase of one recorded block: incident > refused > sweep > block. Reads only booleans and counts, never contents. */
 export function classifyBlock(block, halted) {

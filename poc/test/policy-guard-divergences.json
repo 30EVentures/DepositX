@@ -72,24 +72,9 @@
       "status": "ABSTAINED",
       "reason": "DepositX has no swap kind, so the no-destination exemption has no counterpart"
     },
-    "caps/per-tx-cap-exceeded": {
-      "status": "DISAGREED",
-      "got": "ESCALATE[ESCALATION_REQUIRED]",
-      "reason": "KEY DESIGN DIFFERENCE: over the grant max DepositX asks for the institution's co-signature (ESCALATE); it has no hard per-instruction refusal inside a grant, so the other engine's DENY has no counterpart"
-    },
     "caps/per-tx-cap-beyond-double-precision": {
       "status": "ABSTAINED",
       "reason": "the envelope needs a 20-digit daily cap; DepositX amounts stop at 18 digits (the kernel refuses the grant), so the precision edge cannot be reached"
-    },
-    "caps/daily-cap-exceeded": {
-      "status": "DISAGREED",
-      "got": "ESCALATE[ESCALATION_REQUIRED]",
-      "reason": "KEY DESIGN DIFFERENCE: past the window cap DepositX escalates to the institution's co-signature instead of refusing (the amount also exceeds the per-instruction max under this mapping, so the window rule is not isolated by this case)"
-    },
-    "caps/per-tx-checked-before-daily": {
-      "status": "DISAGREED",
-      "got": "ESCALATE[ESCALATION_REQUIRED]",
-      "reason": "KEY DESIGN DIFFERENCE: both limits broken, DepositX escalates (one co-signature covers both) and reports no ordering of limits; the other engine denies and names the per-transaction cap first"
     },
     "ceiling/always-escalate-overrides-the-ceiling": {
       "status": "ABSTAINED",
@@ -103,22 +88,6 @@
       "status": "ABSTAINED",
       "reason": "a DepositX grant has no chain field, so a missing chain cannot be expressed"
     },
-    "envelope-shape/cap-is-a-number": {
-      "status": "ABSTAINED",
-      "reason": "the subject is perTxMax, which a DepositX grant does not have; the neighbouring daily and ceiling caps are checked as strings by the kernel"
-    },
-    "envelope-shape/per-tx-above-daily": {
-      "status": "ABSTAINED",
-      "reason": "the subject is the perTxMax versus dailyMax relation; DepositX has no perTxMax"
-    },
-    "envelope-shape/ceiling-above-per-tx": {
-      "status": "ABSTAINED",
-      "reason": "the subject is the ceiling versus perTxMax relation; DepositX has no perTxMax"
-    },
-    "envelope-shape/ceiling-equals-per-tx": {
-      "status": "ABSTAINED",
-      "reason": "the subject is the ceiling versus perTxMax relation; DepositX has no perTxMax"
-    },
     "records/transfer-without-destination": {
       "status": "DISAGREED",
       "got": "DENY[DESTINATION_NOT_PERMITTED]",
@@ -131,7 +100,7 @@
     }
   },
   "agreements_to_read_with_care": {
-    "caps/per-tx-cap-exact": "agrees (ESCALATE) only because 1000 is also above the mapped per-instruction max of 100; DepositX has no per-transaction ceiling that this case could land exactly on",
-    "caps/daily-cap-exact": "agrees (ESCALATE) only because 500 is above the mapped per-instruction max of 100; the exactly-equals-the-window edge is not isolated here (delegation.test.js covers it)"
+    "caps/per-tx-cap-exact": "agrees (ESCALATE): 1000 equals the hard per-transaction cap, which is allowed at the cap, and is above the soft ceiling of 100, so the institution must co-sign",
+    "caps/daily-cap-exact": "agrees (ESCALATE): used-today plus 500 lands exactly on the hard daily cap, which is allowed, and 500 is above the soft ceiling of 100, so the institution must co-sign"
   }
 }

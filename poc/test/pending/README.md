@@ -5,11 +5,10 @@ Run them with `npm run test:pending`. Each one belongs to a design note or quest
 
 | File | Belongs to | Waiting for |
 |---|---|---|
-| `over-cap-options.pending.test.js` | `docs/design-questions/over-cap-escalate-or-deny.md` (options B and C) | the owner's choice between options A, B and C |
 | `x3-aggregate-cap.pending.test.js` | `docs/agent-native-access-proposal.md` section 11 (X3) | sign-off to build an institution-wide aggregate cap |
 | `x4-idempotency.pending.test.js` | `docs/persistent-idempotency-proposal.md` (X4) | sign-off to build a persistent idempotency horizon |
 
 When a decision is made and the feature is built, move the file into `test/` (or `test/hardening/`), where it must pass.
 A pending test that starts passing by accident is a signal that the design note is out of date: tell the owner.
 
-Tests named `control` or `additive guarantee` pass today on purpose: they pin the behaviour that must NOT change when the feature is built. Every other test in these files must fail now (checked: 16 red, 3 green controls at the time of writing).
+Tests named `control` or `additive guarantee` pass today on purpose: they pin the behaviour that must NOT change when the feature is built. Every other test in these files must fail now (checked at the time of writing).

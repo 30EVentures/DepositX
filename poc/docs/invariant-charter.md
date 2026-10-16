@@ -417,3 +417,36 @@ nothing while the network is halted or its issuer quarantined, judged from the m
 conditions hold, not read from the kernel), freeze/unfreeze actions for the frozen case, and a patchable
 predicate so a mutation test can plant "sweep ignores the gate". That changes what the safety properties assert,
 so it is proposed here and left for sign-off.
+
+### Roadmap 8.6: a hard tier on grants (option C, 2026-10-16)
+
+Decision N4 (the owner chose C, see `docs/design-questions/over-cap-escalate-or-deny.md`). A GRANT may carry `hard_max` and
+`hard_window_max`. Above the soft limits the institution's co-signature still authorises an instruction; above a hard limit
+the agent path refuses (`ENVELOPE_EXCEEDED`) whoever signs. The hard tier is checked first, down the whole chain, before any
+signature is asked for; `hard_window_max` counts every accepted agent spend (co-signed ones included) and every sweep firing;
+a sub-grant can only narrow its parent's hard values and is bound by every ancestor's; a refused instruction consumes nothing.
+
+**Additive, and shown to be.** The new fields are inside the GRANT payload, which was already signed, so the signed digest is
+unchanged and no digest-version bump is needed. A grant without them gets no new keys on its record; the existing delegation
+search gives exactly its earlier numbers [RAN]: 25 actions, 12,478 states, 311,950 transitions, depth 16, exhausted, no
+failures (258 s). Existing tests pass unmodified apart from the corpus table and one catalogue list.
+
+**Model-check coverage.** The hard tier has its own alphabet (`HARD_TIER_MODEL`, 9 actions: mint, fund, grant `g5` with soft
+$1 / $1 and hard $2 per instruction / $3 per window, in-envelope and co-signed spends, two attacks, revoke), searched to
+exhaustion: 195 states, 1,755 transitions, no failures [RAN, `node src/modelcheck.js 20 hardtier`, about 2 s]. It is separate
+because adding `g5` to the delegation alphabet stopped that search from finishing (it hit the 40,000-state cap at depth 11,
+no failures). The oracle S6(g) re-derives the rule and does **not** read the kernel's own hard-window counter: it keeps its own
+tumbling hard windows, carried through the model state and part of the state key, from every accepted spend and sweep. That
+choice came from a failed first attempt: a planted bug that "forgets" a co-signed spend in the kernel's counter agrees with
+itself, and an oracle reading the same counter cannot see it. Three planted bugs are caught: the hard cap skipped when the
+institution co-signs; co-signed spends not counted in the hard window; the hard window never checked. The state key also
+had to include the hard-window counter, or states differing only in it were merged.
+
+**Corpus.** With the adapter mapping `autoApproveMax` to the soft tier, `perTxMax` to `hard_max` and `dailyMax` to the hard
+window: 22 agreed, 4 disagreed, 18 abstained (was 15, 7, 22). Fourteen deliberate breakages of the kernel change were each
+caught by `test/hardening/hard-tier.test.js`.
+
+**Limits, stated plainly.** An institution cannot lift a hard limit by signing; it revokes the grant and issues a new one. The
+hard window has the soft window's length. A hard tier says nothing about the institution's own direct instructions, which do
+not go through grants. No hard tier on a grant means none: today's behaviour.
+

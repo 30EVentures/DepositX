@@ -35,6 +35,7 @@ export const ERROR_CATALOG = {
   ESCROW_WRONG_GRANT: { retryable: false, remedy: 'Only the grant that locked this escrow, or one of its ancestors, may refund it. Ask the institution, or the locking grant itself, to refund it.' },
   AGENT_QUEUE_UNSUPPORTED: { retryable: true, remedy: 'An agent-authorised PAYMENT cannot be queued for liquidity-saving netting yet. Retry with queueIfShort false (it will be refused while the settlement position is short), or once the payer issuer\'s position covers the amount, or ask the institution to submit it with its own signature.' },
   ESCROW_ACCOUNT_RESERVED: { retryable: false, remedy: 'The account is an escrow holding account (<issuer>:escrow:<id>). Its money moves only through ESCROW_RELEASE, EVENT_RELEASE or ESCROW_REFUND for that escrow; address the beneficiary or payer account instead.' },
+  ENVELOPE_EXCEEDED: { retryable: false, remedy: "The instruction is above the grant's hard limit (hard_max or hard_window_max, counted down the whole grant chain). No signature, the institution's included, can authorise it on the agent path. Send a smaller amount, wait for the hard window to turn over, or ask the institution to issue a new grant with a higher hard limit." },
   GRANT_MISMATCH: { retryable: false, remedy: "An instruction signed by an agent must carry a `grant` field equal to the grant_id of its single `agent:<grant_id>` signature, and `grant` is part of the signed bytes. Set `grant`, sign again with a new inst_id, and do not relabel a signature after signing. An instruction with no agent signature must not carry `grant`." },
   BATCH_LEG_MISBOUND: { retryable: false, remedy: 'This instruction was signed with a batch_digest binding it to a specific set and order of legs. Submit it inside exactly that batch, unchanged, or re-sign it with a new inst_id and no batch_digest to run it standalone.' },
   MALFORMED: { retryable: false, remedy: 'The instruction is not a well-formed { inst_id, type, payload, valid_until, sigs } object.' },
@@ -277,6 +278,8 @@ export class Network {
         per_instruction_max: g.per_instruction_max.toString(), window: { seconds: g.window.seconds, max_total: g.window.max_total.toString() },
         counterparties: g.counterparties, not_after: g.not_after, revoked: g.revoked,
         live: st.live, reason: st.reason, remaining_window: st.remaining_window.toString(),
+        ...(g.hard_max !== undefined ? { hard_max: g.hard_max.toString() } : {}),
+        ...(g.hard_window_max !== undefined ? { hard_window_max: g.hard_window_max.toString(), remaining_hard_window: st.remaining_hard_window.toString() } : {}),
       };
     });
   }
@@ -308,6 +311,8 @@ export class Network {
       allow_types: o.allowTypes, per_instruction_max: big(o.perInstructionMax),
       window: o.window ? { seconds: o.window.seconds, max_total: big(o.window.maxTotal) } : null,
       counterparties: o.counterparties || null, not_after: notAfter,
+      ...(o.hardMax != null ? { hard_max: big(o.hardMax) } : {}),
+      ...(o.hardWindowMax != null ? { hard_window_max: big(o.hardWindowMax) } : {}),
     };
     const role = signAs || (o.parent ? `agent:${o.parent}` : `ops:${o.issuer}`);
     const known = role.startsWith('agent:') ? this.agentKeys[role.slice(6)] : this.K.issuers[role.split(':')[1]];

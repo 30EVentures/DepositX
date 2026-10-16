@@ -1,8 +1,8 @@
 // Phase 1.8: the over-cap question, measured. When an agent instruction is over its grant, DepositX asks for the
 // institution's co-signature (ESCALATE); the policy-guard corpus expects a hard refusal (DENY) for the same cases.
-// docs/design-questions/over-cap-escalate-or-deny.md sets out the options for Caleb. This file pins what is true today
-// (Option A) and measures what the alternatives would do to the corpus, so the decision rests on numbers. The tests for
-// the alternatives themselves are in test/pending/ (red on purpose until a decision).
+// docs/design-questions/over-cap-escalate-or-deny.md set out the options; the owner chose C (two tiers) on 2026-10-16 and it
+// is built (test/hardening/hard-tier.test.js). This file keeps the grants WITHOUT a hard tier pinned as they always were
+// (the additive guarantee) and measures the corpus.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Network, dollars } from '../../src/network.js';
@@ -46,17 +46,16 @@ let corpus = null, why = null;
 try { corpus = loadCorpus(locateCorpus()); } catch (e) { why = e instanceof CorpusError ? e.message : String(e); }
 const toDeny = (codeFor) => (c, k) => { const a = answerCase(c, k); return a && a.verdict === 'ESCALATE' ? { verdict: 'DENY', codes: [codeFor(`${c.set}/${c.id}`)] } : a; };
 
-test('measured: Option A leaves 15 agreed, 7 disagreed, 22 abstained, and the three cap cases are the design difference', { skip: why ?? false }, () => {
+test('measured: with the hard tier built (option C) the corpus reads 22 agreed, 4 disagreed, 18 abstained; the three cap cases and four envelope-shape cases moved', { skip: why ?? false }, () => {
   const res = runCorpus(corpus, answerCase);
-  assert.deepEqual(counts(res), { AGREED: 15, DISAGREED: 7, ABSTAINED: 22, UNANSWERED: 0, UNREADABLE: 0 });
-  assert.deepEqual(res.filter((r) => r.status === 'DISAGREED' && r.key.startsWith('caps/')).map((r) => r.key).sort(), ['caps/daily-cap-exceeded', 'caps/per-tx-cap-exceeded', 'caps/per-tx-checked-before-daily']);
+  assert.deepEqual(counts(res), { AGREED: 22, DISAGREED: 4, ABSTAINED: 18, UNANSWERED: 0, UNREADABLE: 0 });
+  assert.deepEqual(res.filter((r) => r.status === 'DISAGREED').map((r) => r.key).sort(), ['envelopes/no-envelope', 'records/amount-leading-zeros', 'records/amount-zero', 'records/transfer-without-destination'], 'what is left is by design: strict integer strings and the X1 pre-authorization rule');
+  const moved = ['caps/per-tx-cap-exceeded', 'caps/daily-cap-exceeded', 'caps/per-tx-checked-before-daily', 'envelope-shape/cap-is-a-number', 'envelope-shape/per-tx-above-daily', 'envelope-shape/ceiling-above-per-tx', 'envelope-shape/ceiling-equals-per-tx'];
+  assert.deepEqual(res.filter((r) => moved.includes(r.key)).map((r) => r.status), moved.map(() => 'AGREED'), 'the three cap cases and the four envelope-shape cases now agree');
 });
-test('measured: Option B (every ESCALATE becomes DENY) is WORSE on the corpus even with matching codes, because the corpus has a soft tier that expects ESCALATE', { skip: why ?? false }, () => {
+test('measured: turning every ESCALATE into DENY on top of option C would be worse again (19 agreed): the soft tier is real', { skip: why ?? false }, () => {
   const plain = counts(runCorpus(corpus, toDeny(() => 'ESCALATION_REQUIRED')));
-  assert.equal(plain.AGREED, 12);
-  const coded = runCorpus(corpus, toDeny((k) => ({ 'caps/per-tx-cap-exceeded': 'PER_TX_CAP', 'caps/daily-cap-exceeded': 'DAILY_CAP', 'caps/per-tx-checked-before-daily': 'PER_TX_CAP' }[k] ?? 'X')));
-  assert.equal(counts(coded).AGREED, 15, 'three hard-cap cases fixed, the two exact-boundary soft cases lost: no net gain');
-  assert.deepEqual(coded.filter((r) => r.status === 'DISAGREED' && r.key.startsWith('caps/')).map((r) => r.key).sort(), ['caps/daily-cap-exact', 'caps/per-tx-cap-exact']);
+  assert.equal(plain.AGREED, 19);
 });
 test('REFUSAL (measured): the measurements above never pass on an empty or missing corpus', () => {
   assert.throws(() => runCorpus({ sets: [], cases: [] }, answerCase), 'an empty corpus must be refused, not counted as agreement');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { modelCheck, DELEGATION_MODEL } from '../src/modelcheck.js';
+import { modelCheck, DELEGATION_MODEL, HARD_TIER_MODEL } from '../src/modelcheck.js';
 import { KernelError, Ledger, messageOf } from '../src/kernel.js';
 
 test('model check: every state reachable within 5 actions (incl. a slow core, attacks, and the four new templates) satisfies all safety and liveness properties', () => {
@@ -284,3 +284,56 @@ withDelegationMutant('the grant is taken from the role label again: signed bytes
   };
   return () => (Ledger.prototype.executeBlock = orig);
 }, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);
+
+// Option C (hard tier): its own small alphabet, so it can be searched to exhaustion. The oracle (S6 g) never lets an
+// accepted agent instruction exceed a hard limit down its chain, co-signed or not, and counts co-signed spends in the hard window.
+test('model check S6(g): within 12 hard-tier actions no instruction passes a hard limit, co-signed or not, and the hard window counts co-signed spends', () => {
+  const r = modelCheck({ maxDepth: 12, maxStates: 5000, actions: HARD_TIER_MODEL });
+  assert.deepEqual(r.failures, []);
+  assert.equal(r.actions, 9);
+  assert.equal(r.exhausted, true, 'the search ran out of new states, it did not stop at a cap');
+  assert.ok(r.states > 100, `explored ${r.states} states`);
+});
+function withHardTierMutant(name, patch, expectKinds) {
+  test(`mutation (hard tier): the checker catches a planted kernel bug (${name})`, () => {
+    const restore = patch();
+    try {
+      const r = modelCheck({ maxDepth: 8, maxStates: 5000, actions: HARD_TIER_MODEL });
+      assert.ok(r.failures.length > 0, 'the planted bug went undetected');
+      assert.ok(r.failures.some((f) => expectKinds.includes(f.kind)), `expected one of ${expectKinds}, got ${r.failures.map((f) => f.kind)}`);
+    } finally { restore(); }
+  });
+}
+const coSigned = (tx) => Object.keys(tx.sigs || {}).some((k) => k.startsWith('ops:'));
+const agentRec = (self, tx) => { const role = Object.keys(tx.sigs || {}).find((r) => r.startsWith('agent:')); return role && self.s.grants.get(role.slice(6)); };
+withHardTierMutant('the hard cap is skipped when the institution co-signs', () => {
+  const orig = Ledger.prototype.tx_TRANSFER;
+  Ledger.prototype.tx_TRANSFER = function (tx, time, j, events) {
+    const rec = agentRec(this, tx);
+    if (!rec || rec.hard_max === undefined || !coSigned(tx)) return orig.call(this, tx, time, j, events);
+    const saved = rec.hard_max; delete rec.hard_max; // bug: a co-signature lifts the hard cap
+    try { return orig.call(this, tx, time, j, events); } finally { const cur = this.s.grants.get(rec.id); rec.hard_max = saved; if (cur !== rec) cur.hard_max = saved; }
+  };
+  return () => (Ledger.prototype.tx_TRANSFER = orig);
+}, ['S3_ATTACK_ACCEPTED', 'S6_DELEGATION']);
+withHardTierMutant('co-signed spends are not counted in the hard window', () => {
+  const orig = Ledger.prototype.tx_TRANSFER;
+  Ledger.prototype.tx_TRANSFER = function (tx, time, j, events) {
+    const rec = agentRec(this, tx);
+    const before = rec && rec.hwin;
+    const out = orig.call(this, tx, time, j, events);
+    if (rec && before && coSigned(tx)) { const cur = this.s.grants.get(rec.id); if (cur && cur.hwin) cur.hwin = { ...before }; } // bug: forgets the co-signed spend
+    return out;
+  };
+  return () => (Ledger.prototype.tx_TRANSFER = orig);
+}, ['S6_DELEGATION', 'S3_ATTACK_ACCEPTED']);
+withHardTierMutant('the hard window is never checked, only the per-instruction hard cap', () => {
+  const orig = Ledger.prototype.tx_TRANSFER;
+  Ledger.prototype.tx_TRANSFER = function (tx, time, j, events) {
+    const rec = agentRec(this, tx);
+    if (!rec || rec.hard_window_max === undefined) return orig.call(this, tx, time, j, events);
+    const saved = rec.hard_window_max; rec.hard_window_max = 10n ** 15n; // bug: the hard window is effectively unlimited (the counter still runs)
+    try { return orig.call(this, tx, time, j, events); } finally { const cur = this.s.grants.get(rec.id); rec.hard_window_max = saved; if (cur !== rec) cur.hard_window_max = saved; }
+  };
+  return () => (Ledger.prototype.tx_TRANSFER = orig);
+}, ['S6_DELEGATION', 'S3_ATTACK_ACCEPTED']);

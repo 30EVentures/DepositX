@@ -1,6 +1,6 @@
 # Design question for the owner: when an agent is over its grant, ask the institution or refuse?
 
-Status: **a question, not a change.** Nothing in the kernel was altered. Written 2026-10-15 for a decision. DepositX is a proof of concept: consensus is simulated, there is no bank partner, and it is not regulated.
+Status: **DECIDED 2026-10-16: option C (two tiers), built on branch `feature/hard-tier`** (not yet merged). It was a question until then; sections 1 to 5 are kept as written for the record, and section 7 says what was built. DepositX is a proof of concept: consensus is simulated, there is no bank partner, and it is not regulated.
 
 ## 1. What happens today (Option A)
 
@@ -33,15 +33,31 @@ Three of the seven disagreements are this question (`caps/per-tx-cap-exceeded`, 
 
 ## 4. Recommendation
 
-**C**, if the goal is to be checkable against an outside corpus and to give an owner a "never above this" line for an agent; **A** if the goal is only to model the institution-above-agent design, in which case record the three disagreements as permanent and stop. **B as a default is not recommended** (no gain, loses the co-signature path). I have not built any of them.
+**C**, if the goal is to be checkable against an outside corpus and to give an owner a "never above this" line for an agent; **A** if the goal is only to model the institution-above-agent design, in which case record the three disagreements as permanent and stop. **B as a default is not recommended** (no gain, loses the co-signature path). The owner chose C; see section 7.
 
 ## 5. Tests
 
 - Option A: green now, `test/hardening/conformance-options.test.js` (including the measurements above, which skip with a stated reason if the corpus is not present).
-- Options B and C: `test/pending/over-cap-options.pending.test.js`, red on purpose until a decision (see `test/pending/README.md`). `npm run test:pending` runs them.
+- Options B and C: the red tests that stood in `test/pending/` were replaced by the real thing, `test/hardening/hard-tier.test.js` (51 tests, written first and red before the kernel change). Option B was not built.
 
 ## 6. Decision needed
 
 1. A, B (default or per-grant switch), or C?
 2. If C: may an institution co-signature ever exceed a hard tier? (Recommended no.)
 3. If C: are the new field names (`hard_max`, `hard_window_max`) acceptable, and may the GRANT payload gain them under the single digest-version change already pending?
+
+## 7. What was built (option C)
+
+A GRANT may carry two optional fields, both canonical integer strings of cents inside the signed payload:
+
+- `hard_max`: the largest single agent instruction. It must be at least `per_instruction_max`, and at most `hard_window_max` when both are set.
+- `hard_window_max`: the most the grant's agent path may move in one window (the same length as the soft window). It must be at least the soft window cap. It counts **every** accepted agent spend, in the envelope or co-signed, and every sweep firing.
+
+Rules, each pinned by a test:
+- The hard tier is checked first, down the whole grant chain: above it the answer is `ENVELOPE_EXCEEDED`, with or without the institution's signature, and nothing is charged. Between the soft and the hard tier the institution's co-signature works as before and is not charged to the soft window.
+- A sub-grant may only narrow its parent's hard values; a sub-grant with none of its own is still bound by every ancestor's hard tier, and its spends count against the ancestors' hard windows.
+- A sweep fires only within the remaining hard window.
+- Absent fields mean exactly today's behaviour: the grant record gets no new keys, the state root of a chain that never uses the tier is unchanged, and the delegation model search gives the same numbers as before.
+- No change to the signed digest: the new fields sit inside the GRANT payload, which was already signed. No digest-version bump is needed for this option.
+
+Measured on this branch [RAN]: the policy-guard corpus reads **22 agreed, 4 disagreed, 18 abstained** (was 15, 7, 22). The three cap cases and four envelope-shape cases now agree. The four that remain are by design (strict integer strings for zero and leading zeros; the pre-authorization rule from hardening X1). Turning every ESCALATE into DENY on top of C would drop it to 19 agreed, so the soft tier is real. Assurance: a separate exhaustive model (`node src/modelcheck.js 20 hardtier`, 9 actions) with an oracle that keeps its own hard windows and three planted bugs, all caught.
